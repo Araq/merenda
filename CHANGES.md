@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Use Moe's Matter semantic scope mappings to distinguish HTML/custom element
+  names, attributes, CSS selectors and common language values in existing themes.
+  Preserve preprocessor colors for C/C++ pragmas and string colors for regex
+  captures and format placeholders. Adapt Kosmo pane snapshots and Select All to
+  Moe's window-owned visual selection API, preserving the cursor and preferred
+  column across pane switches.
+
 - Keep the open state during menubar arrow navigation: `<left>`/`<right>` between
   menu bar buttons only move the highlight while the current menu is closed, and
   open the next or previous menu while the current menu is open. Opening menus
@@ -26,6 +33,7 @@
   etab now highlights only while its pane has keyboard focus, so cycling into
   the menubar or another ui element outside the pane unhighlights it until the
   pane is entered again.
+
 ## 0.27.0
 
 - Add GUI resource markup with HTML5 syntax, `nk-` native elements, application
