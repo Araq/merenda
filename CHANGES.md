@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Run Kosmo's GitHub CLI through the user's login shell on macOS and Linux, so
+  apps opened from the desktop can find `gh` installed through shell profiles.
+  Preserve the project directory and noninteractive GitHub settings after startup.
+
 - Add a Windows VirtualBox test setup, matching Guest Additions, an OpenGL 3.3
   console probe, and guards against concurrent bhyve operation. Document the
   failed GPU acceleration test with the FreeBSD 7.2.20 packages.
