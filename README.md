@@ -480,6 +480,7 @@ roots. You can remove every root and add folders again later.
 Right-click a file or folder and choose **Copy Full Path** or **Copy Relative Path**
 to copy its path to the clipboard. Relative paths start at the closest containing
 project root; a project root's own relative path is `.`.
+Hover over a file in the tree to see its relative path and any Git status details.
 
 Use `Ctrl-W h` from the leftmost editor or terminal pane to focus the visible Files
 or Find sidebar. `Ctrl-W l` returns to the adjacent pane. Control-key continuations

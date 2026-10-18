@@ -653,19 +653,11 @@ proc performFileTreeAction(
 ) =
   if action in {ftiaCopyFullPath, ftiaCopyRelativePath}:
     let fullPath = normalizedPath(absolutePath(path))
-    var copiedPath = fullPath
-    if action == ftiaCopyRelativePath:
-      var containingRoot: string
-      for root in frontend.fileTree.rootPaths:
-        if (fullPath == root or fullPath.isRelativeTo(root)) and
-            root.len > containingRoot.len:
-          containingRoot = root
-      if containingRoot.len > 0:
-        copiedPath =
-          if fullPath == containingRoot:
-            "."
-          else:
-            relativePath(fullPath, containingRoot)
+    let copiedPath =
+      if action == ftiaCopyRelativePath:
+        frontend.fileTree.projectRelativePath(fullPath)
+      else:
+        fullPath
     discard nimkit.generalPasteboard().replaceWithPlainText(copiedPath)
     return
   if action == ftiaGitDiff:

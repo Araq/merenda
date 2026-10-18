@@ -1,10 +1,16 @@
-import std/[os, strutils, tempfiles, unicode, unittest]
+import std/[os, strutils, tempfiles, times, unicode, unittest]
 
 import figdraw
 
 import merenda/nimkit
 import merenda/kosmo/[kosmo, workspacefiles]
 import fixtures/ui
+
+func center(bounds: Rect): Point =
+  initPoint(
+    bounds.origin.x + bounds.size.width / 2.0'f32,
+    bounds.origin.y + bounds.size.height / 2.0'f32,
+  )
 
 proc renderedText(node: Fig): string =
   for glyphIndex in 0 ..< node.textLayout.glyphCount():
@@ -39,6 +45,66 @@ proc rendersTextWithColor(view: View, text: string, textColor: Color): bool =
           return true
 
 suite "Kosmo file tree interactions":
+  test "file hover shows paths relative to the closest project root":
+    let
+      workspace = createTempDir("kosmo-tree-tooltips-", "")
+      first = workspace / "first"
+      second = workspace / "second"
+      folder = first / "source folder"
+      firstFile = folder / "café.nim"
+      secondFile = second / "other λ.txt"
+    createDir(folder)
+    createDir(second)
+    writeFile(firstFile, "first")
+    writeFile(secondFile, "second")
+    let
+      tree = newKosmoFileTree(first, frame = rect(20, 20, 280, 300))
+      window = newWindow("File path tooltips", frame = rect(0, 0, 440, 360))
+      root = newView()
+    defer:
+      window.close()
+      tree.stopGitStatusMonitoring()
+      removeDir(workspace)
+    require tree.addRootPath(second)
+    tree.expandItem(folder)
+    root.addSubview(tree)
+    window.setContentView(root)
+    root.layoutSubtreeIfNeeded()
+
+    for entry in [
+      (path: firstFile, relative: "source folder" / "café.nim"),
+      (path: secondFile, relative: "other λ.txt"),
+    ]:
+      let row = tree.rowForItem(entry.path)
+      require row >= 0
+      check tree.tooltipForItem(entry.path) == entry.relative
+      let rowRect = tree.rowItemRect(row)
+      require not rowRect.isEmpty
+      discard window.mouseMovedAt(tree.pointToWindow(rowRect.center()))
+      discard window.animationScheduler().tick(initDuration(milliseconds = 500))
+      let renders = window.buildRenders()
+      require TooltipDrawLevel in renders.layers
+      var found = false
+      for node in renders[TooltipDrawLevel].nodes:
+        if node.kind == nkText and node.renderedText() == entry.relative:
+          found = true
+      check found
+
+    require tree.addRootPath(folder)
+    check tree.tooltipForItem(firstFile) == "café.nim"
+    tree.applyGitStatus(
+      GitStatusSnapshot(
+        rootPath: first,
+        isRepository: true,
+        entries: @[GitStatusEntry(path: firstFile, state: gfsModified)],
+      )
+    )
+    check tree.tooltipForItem(firstFile) == "café.nim\nModified"
+    require tree.removeRootPath(folder)
+    check tree.tooltipForItem(firstFile) == "source folder" / "café.nim" & "\nModified"
+    discard window.mouseMovedAt(initPoint(400, 340))
+    check TooltipDrawLevel notin window.buildRenders().layers
+
   test "display shortcuts are scoped to the focused file tree":
     let root = createTempDir("kosmo-browser-shortcuts-", "")
     createDir(root / "folder" / "nested")

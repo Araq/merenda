@@ -4,6 +4,10 @@
 
 ## 0.27.6
 
+- Show project-relative file paths in file-tree hover tooltips, preserving Git
+  status details and using the same closest project root as Copy Relative Path.
+  Connect outline item tooltips to NimKit's shared hover display.
+
 - Keep editor Find scoped to its pane, including its query, highlights, errors,
   and match navigation when other panes repaint or search the same buffer.
   Closing Find in one pane preserves the other panes' searches. Switching tabs

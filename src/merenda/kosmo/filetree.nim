@@ -110,6 +110,22 @@ func title*(mode: FileTreeDisplayMode): string =
 proc expandableDirectory(path: string): bool =
   path.isBrowsableDirectory()
 
+proc projectRelativePath*(tree: KosmoFileTree, path: string): string =
+  ## Return a path relative to the closest containing project root.
+  ## Paths outside the workspace retain their normalized absolute path.
+  let fullPath = normalizedPath(absolutePath(path))
+  var containingRoot: string
+  for root in tree.xRootPaths:
+    if (fullPath == root or fullPath.isRelativeTo(root)) and
+        root.len > containingRoot.len:
+      containingRoot = root
+  if containingRoot.len == 0:
+    fullPath
+  elif fullPath == containingRoot:
+    "."
+  else:
+    relativePath(fullPath, containingRoot)
+
 proc loadChildPaths(tree: KosmoFileTree, parentIdentifier: string) =
   if tree.xChildren.hasKey(parentIdentifier):
     return
@@ -469,6 +485,7 @@ protocol KosmoFileTreeDataSource of nimkit.OutlineViewDataSource:
     let
       expandable = tree.isTreeDirectory(identifier)
       decoration = tree.gitDecoration(identifier)
+      relativePath = tree.projectRelativePath(identifier)
     nimkit.initOutlineItem(
       identifier,
       identifier.fileBrowserDisplayName(),
@@ -481,9 +498,9 @@ protocol KosmoFileTreeDataSource of nimkit.OutlineViewDataSource:
       leaf = not expandable,
       tooltip =
         if decoration.tooltip.len > 0:
-          identifier & "\n" & decoration.tooltip
+          relativePath & "\n" & decoration.tooltip
         else:
-          identifier,
+          relativePath,
       decoration = decoration,
     )
 
