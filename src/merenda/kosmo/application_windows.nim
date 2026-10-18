@@ -651,6 +651,23 @@ proc updateProjectWindowTitle(frontend: KosmoApplication)
 proc performFileTreeAction(
     frontend: KosmoApplication, path: string, action: FileTreeItemAction
 ) =
+  if action in {ftiaCopyFullPath, ftiaCopyRelativePath}:
+    let fullPath = normalizedPath(absolutePath(path))
+    var copiedPath = fullPath
+    if action == ftiaCopyRelativePath:
+      var containingRoot: string
+      for root in frontend.fileTree.rootPaths:
+        if (fullPath == root or fullPath.isRelativeTo(root)) and
+            root.len > containingRoot.len:
+          containingRoot = root
+      if containingRoot.len > 0:
+        copiedPath =
+          if fullPath == containingRoot:
+            "."
+          else:
+            relativePath(fullPath, containingRoot)
+    discard nimkit.generalPasteboard().replaceWithPlainText(copiedPath)
+    return
   if action == ftiaGitDiff:
     discard frontend.showGitDiff(path)
     return

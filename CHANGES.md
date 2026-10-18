@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add Copy Full Path and Copy Relative Path to Kosmo's file-tree context menu.
+  Relative paths use the closest containing project root, including nested roots.
+
 - Let Kosmo's Files/Find sidebar shrink to 128 points, 20% narrower than before.
 
 - Include the visible Files or Find sidebar in Kosmo's Ctrl-W h/l pane focus

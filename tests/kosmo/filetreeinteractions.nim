@@ -787,11 +787,13 @@ suite "Kosmo file browser item actions":
     let menu = tree.menu()
     require not menu.isNil
     check menu.isOpen()
-    require menu.items().len == 3
+    let expectedActions =
+      @[ftiaRename, ftiaDelete, ftiaGitDiff, ftiaCopyFullPath, ftiaCopyRelativePath]
+    require menu.items().len == expectedActions.len
     discard tree.selectItemWithIdentifier(root / "two.txt")
     for index, item in menu.items():
       check item.perform(window)
-      check actions[^1] == (root / "one.txt", FileTreeItemAction(index))
+      check actions[^1] == (root / "one.txt", expectedActions[index])
     require window.dispatchKeyDown(KeyEvent(key: keyEscape, keyCode: keyEscape.ord))
     check not window.hasActiveTransientSession()
     discard window.rightMouseDownAt(tree.pointToWindow(initPoint(120, 170)))
@@ -820,7 +822,7 @@ suite "Kosmo file browser item actions":
     )
     let menu = tree.menu()
     require not menu.isNil
-    require menu.items().len == 4
+    require menu.items().len == 6
     check not menu.items()[0].enabled
     check not menu.items()[1].enabled
     let removeItem = menu.items()[^1]
@@ -830,6 +832,88 @@ suite "Kosmo file browser item actions":
     require removeItem.perform(window)
     check actions == @[(root, ftiaRemoveRoot)]
     require window.dispatchKeyDown(KeyEvent(key: keyEscape, keyCode: keyEscape.ord))
+
+  test "copy path actions retain the clicked item and use its containing project root":
+    let
+      workspace = createTempDir("kosmo-copy-tree-path-", "")
+      first = workspace / "first"
+      second = workspace / "second"
+      folder = first / "source folder"
+      firstFile = folder / "café.nim"
+      secondFile = second / "other λ.txt"
+    createDir(folder)
+    createDir(second)
+    writeFile(firstFile, "first")
+    writeFile(secondFile, "second")
+    let frontend = newKosmoApplication(
+      newApplication("Kosmo Copy Tree Path"), first, monitorsGitStatus = false
+    )
+    let
+      pasteboard = generalPasteboard()
+      previousProvider = pasteboard.provider
+    pasteboard.provider = nil
+    pasteboard.clearContents()
+    defer:
+      frontend.close()
+      pasteboard.clearContents()
+      pasteboard.provider = previousProvider
+      removeDir(workspace)
+    require frontend.openPath(second)
+    let cases =
+      @[
+        (path: firstFile, relative: "source folder" / "café.nim"),
+        (path: secondFile, relative: "other λ.txt"),
+        (path: folder, relative: "source folder"),
+        (path: first, relative: "."),
+        (path: second, relative: "."),
+      ]
+    for entry in cases:
+      let menu = frontend.fileTree.itemContextMenu(entry.path)
+      discard frontend.fileTree.selectItemWithIdentifier(first)
+      for action in [ftiaCopyFullPath, ftiaCopyRelativePath]:
+        let item = menu.menuItemForAction("kosmo.fileTree." & $action)
+        require not item.isNil
+        check item.title ==
+          (if action == ftiaCopyFullPath: "Copy Full Path" else: "Copy Relative Path")
+        check item.enabled
+        pasteboard.declareTypes([PasteboardTypeTextStorage])
+        require pasteboard.setAttributedString(
+          newAttributedString("previous selection")
+        )
+        require item.perform(frontend.window)
+        check pasteboard.plainText() ==
+          (if action == ftiaCopyFullPath: entry.path else: entry.relative)
+        check pasteboard.availableTypeFromArray(
+          [PasteboardTypeTextStorage, PasteboardTypeString]
+        ) == PasteboardTypeString
+
+    require frontend.openPath(folder)
+    for entry in [
+      (path: firstFile, relative: "café.nim"), (path: folder, relative: ".")
+    ]:
+      let menu = frontend.fileTree.itemContextMenu(entry.path)
+      let item = menu.menuItemForAction("kosmo.fileTree." & $ftiaCopyRelativePath)
+      require not item.isNil
+      require item.perform(frontend.window)
+      check pasteboard.plainText() == entry.relative
+
+    let deletedPath = second / "deleted.txt"
+    frontend.fileTree.applyGitStatus(
+      GitStatusSnapshot(
+        rootPath: second,
+        isRepository: true,
+        entries: @[GitStatusEntry(path: deletedPath, state: gfsDeleted)],
+      )
+    )
+    frontend.fileTree.displayMode = FileTreeDisplayMode.SourceControlChanges
+    require frontend.fileTree.rowForItem(deletedPath) >= 0
+    let deletedMenu = frontend.fileTree.itemContextMenu(deletedPath)
+    for action in [ftiaCopyFullPath, ftiaCopyRelativePath]:
+      let item = deletedMenu.menuItemForAction("kosmo.fileTree." & $action)
+      require not item.isNil
+      require item.perform(frontend.window)
+      check pasteboard.plainText() ==
+        (if action == ftiaCopyFullPath: deletedPath else: "deleted.txt")
 
   test "rename and delete update files and reject overwriting":
     let root = createTempDir("kosmo-mutations-", "")

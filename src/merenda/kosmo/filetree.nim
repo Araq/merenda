@@ -31,6 +31,8 @@ type
     ftiaDelete
     ftiaGitDiff
     ftiaRemoveRoot
+    ftiaCopyFullPath
+    ftiaCopyRelativePath
 
   FileTreeItemActionHandler* =
     proc(path: string, action: FileTreeItemAction) {.closure.}
@@ -529,7 +531,8 @@ proc itemContextMenu*(tree: KosmoFileTree, path: string): nimkit.Menu =
   if path.len == 0:
     return
   result = nimkit.newMenu("File Actions")
-  var actions = @[ftiaRename, ftiaDelete, ftiaGitDiff]
+  var actions =
+    @[ftiaRename, ftiaDelete, ftiaGitDiff, ftiaCopyFullPath, ftiaCopyRelativePath]
   if path in tree.xRootPaths:
     actions.add ftiaRemoveRoot
   for action in actions:
@@ -540,13 +543,15 @@ proc itemContextMenu*(tree: KosmoFileTree, path: string): nimkit.Menu =
         of ftiaDelete: "Delete…"
         of ftiaGitDiff: "Git Diff"
         of ftiaRemoveRoot: "Remove Project Root"
+        of ftiaCopyFullPath: "Copy Full Path"
+        of ftiaCopyRelativePath: "Copy Relative Path"
       selector = nimkit.actionSelector("kosmo.fileTree." & $action)
       item = nimkit.newMenuItem(title, selector)
       weakTree = tree.unsafeWeakRef()
     item.validates = false
     item.enabled =
       not tree.onItemAction.isNil and
-      (action in {ftiaGitDiff, ftiaRemoveRoot} or path notin tree.xRootPaths)
+      (action notin {ftiaRename, ftiaDelete} or path notin tree.xRootPaths)
     proc makeTarget(
         action: FileTreeItemAction, selector: nimkit.ActionSelector
     ): nimkit.ClosureTarget =
