@@ -646,11 +646,28 @@ proc showGitDiff*(frontend: KosmoApplication, path = ""): bool {.discardable.} =
     refreshesRepository = true,
   )
 
+proc updateProjectWindowTitle(frontend: KosmoApplication)
+
 proc performFileTreeAction(
     frontend: KosmoApplication, path: string, action: FileTreeItemAction
 ) =
+  if action in {ftiaCopyFullPath, ftiaCopyRelativePath}:
+    let fullPath = normalizedPath(absolutePath(path))
+    let copiedPath =
+      if action == ftiaCopyRelativePath:
+        frontend.fileTree.projectRelativePath(fullPath)
+      else:
+        fullPath
+    discard nimkit.generalPasteboard().replaceWithPlainText(copiedPath)
+    return
   if action == ftiaGitDiff:
     discard frontend.showGitDiff(path)
+    return
+  if action == ftiaRemoveRoot:
+    if frontend.fileTree.removeRootPath(path):
+      frontend.updateProjectWindowTitle()
+      if not frontend.searchPanel.isNil:
+        frontend.searchPanel.rootPaths = frontend.fileTree.rootPaths
     return
   let
     renaming = action == ftiaRename
@@ -1039,7 +1056,7 @@ proc newKosmoApplication*(
         ),
       ]
     )
-    sidebarPane = newKosmoSidebarPane(sidebarTabs, fileTree, searchPanel)
+    sidebarPane = newKosmoSidebarPane(sidebarTabs, fileBrowserPanel, searchPanel)
     splitView = nimkit.newSplitView(nimkit.laHorizontal)
     dockView = nimkit.newDockView()
     mainMenu = app.mainMenu()
@@ -1095,7 +1112,7 @@ proc newKosmoApplication*(
 
   if hasFileBrowser:
     splitView.addPane(
-      sidebarPane, minSize = 160.0'f32, maxSize = 420.0'f32, collapsible = true
+      sidebarPane, minSize = 128.0'f32, maxSize = 420.0'f32, collapsible = true
     )
   splitView.addPane(dockView, minSize = 320.0'f32)
 

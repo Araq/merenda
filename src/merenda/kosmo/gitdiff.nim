@@ -1218,6 +1218,7 @@ proc showSearch*(panel: KosmoGitDiffPanel): bool {.discardable.}
 proc loadSearchPatches(panel: KosmoGitDiffPanel)
 proc revealPendingSearch(panel: KosmoGitDiffPanel)
 proc handleSharedKeys(panel: KosmoGitDiffPanel, event: nimkit.KeyEvent): bool
+proc handleReaderKeys(panel: KosmoGitDiffPanel, event: nimkit.KeyEvent): bool
 proc ensureFileMaterialized(panel: KosmoGitDiffPanel, index: int, forceText = false)
 proc queueFilePatch(
   panel: KosmoGitDiffPanel, path: string, explicit: bool, retry = false
@@ -1646,7 +1647,7 @@ proc newDisclosureButton(
         invocation.setResult(false)
     else:
       invocation.setResult(
-        not button.panel.isNil and button.panel[].handleSharedKeys(event)
+        not button.panel.isNil and button.panel[].handleReaderKeys(event)
       )
   discard
     result.replaceMethod(nimkitSelectors.performKeyEquivalent(), keyEquivalentMethod)
@@ -1691,7 +1692,7 @@ proc newGitDiffTextView(panel: KosmoGitDiffPanel): GitDiffTextView =
   ) =
     invocation.setResult(
       not weakPanel.isNil and
-        weakPanel[].handleSharedKeys(invocation.argsAs(nimkit.KeyEvent))
+        weakPanel[].handleReaderKeys(invocation.argsAs(nimkit.KeyEvent))
     )
   discard result.withProtocol(GitDiffTextDrawing)
   discard result.replaceMethod(nimkitSelectors.performKeyEquivalent(), keys)
@@ -2113,6 +2114,10 @@ proc handleSharedKeys(panel: KosmoGitDiffPanel, event: nimkit.KeyEvent): bool =
   if not panel.search.isNil and panel.search.handleSearchKey(event):
     return true
   if not panel.keyEquivalentHandler.isNil and panel.keyEquivalentHandler(event):
+    return true
+
+proc handleReaderKeys(panel: KosmoGitDiffPanel, event: nimkit.KeyEvent): bool =
+  if panel.handleSharedKeys(event):
     return true
   if event.key == nimkit.keyTab and event.modifiers == {}:
     return panel.focusFirstDisclosure()
@@ -2922,7 +2927,6 @@ protocol GitDiffLayout of nimkit.ViewLayoutProtocol:
       nimkit.rect(0, 44, bounds.size.width, max(bounds.size.height - 44, 0))
     )
     panel.syncDisclosureButtons()
-    panel.search.bar.layoutInBounds(bounds)
 
 proc `markdownStyle=`*(panel: KosmoGitDiffPanel, style: nimkit.MarkdownStyle) =
   ## Apply the shared Markdown palette while keeping file controls compact.
@@ -3166,7 +3170,7 @@ proc newKosmoGitDiffPanel(
         weakPanel[].keyEquivalentHandler(event):
       invocation.setResult(true)
     else:
-      invocation.setResult(not weakPanel.isNil and weakPanel[].handleSharedKeys(event))
+      invocation.setResult(not weakPanel.isNil and weakPanel[].handleReaderKeys(event))
   discard result.markdownView.replaceMethod(
     nimkitSelectors.performKeyEquivalent(), keyEquivalentMethod
   )

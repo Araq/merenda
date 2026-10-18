@@ -43,6 +43,8 @@ type
     documentTabs*: nimkit.DocumentTabs
     searchBar: KosmoSearchBar
     searchOrigin: KosmoBufferCursor
+    searchState: KosmoSearchState
+    searchBufferId: Option[KosmoBufferId]
     renderBuffer: RenderBuffer
     statusLabel: nimkit.Label
     commandBar: KosmoCommandBar
@@ -95,6 +97,7 @@ type
     activeIndicator: KosmoPaneIndicator
     dockController: WeakRef[KosmoDockController]
     observedWindow: WeakRef[nimkit.Window]
+    pendingPanePrefix: bool
 
   KosmoEditorGroup* = ref object
     identifier*: string

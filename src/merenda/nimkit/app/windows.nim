@@ -185,6 +185,7 @@ type
     xMouseActiveView: View
     xMouseHoverView: View
     xToolTipTarget: View
+    xToolTipText: string
     xToolTipPoint: Point
     xToolTipOverlay: TooltipOverlayView
     xToolTipDelayAnimation: Animation
@@ -634,10 +635,14 @@ proc stopToolTipDelay(window: Window) =
 proc clearToolTip(window: Window) =
   window.stopToolTipDelay()
   window.xToolTipTarget = nil
+  window.xToolTipText.setLen(0)
   if not window.xToolTipOverlay.isNil:
     window.xToolTipOverlay.xText.setLen(0)
     if not window.xToolTipOverlay.superview().isNil:
       window.xToolTipOverlay.removeFromSuperview()
+
+proc currentToolTipText(window: Window, target: View): string =
+  target.toolTipAtPoint(target.pointFromView(window.xToolTipPoint, window.xContentView))
 
 proc finishToolTipDelay(window: Window) {.slot.} =
   window.xToolTipDelayAnimation = nil
@@ -649,7 +654,7 @@ proc finishToolTipDelay(window: Window) {.slot.} =
     window.clearToolTip()
     return
 
-  let text = target.toolTip()
+  let text = window.currentToolTipText(target)
   if text.len == 0:
     window.clearToolTip()
     return
@@ -659,6 +664,7 @@ proc finishToolTipDelay(window: Window) {.slot.} =
   let
     overlay = window.xToolTipOverlay
     contentBounds = content.bounds()
+  window.xToolTipText = text
   overlay.xText = text
   overlay.xAnchor = initPoint(
     window.xToolTipPoint.x - contentBounds.origin.x,
@@ -681,10 +687,10 @@ proc scheduleToolTip(window: Window) =
   if not window.startAnimation(animation):
     window.xToolTipDelayAnimation = nil
 
-proc toolTipTarget(view: View): View =
+proc toolTipTarget(view, content: View, contentPoint: Point): View =
   var candidate = view
   while not candidate.isNil:
-    if candidate.toolTip().len > 0:
+    if candidate.toolTipAtPoint(candidate.pointFromView(contentPoint, content)).len > 0:
       return candidate
     candidate = candidate.superview()
 
@@ -693,22 +699,28 @@ proc updateToolTip(window: Window, target: View, contentPoint: Point) =
     window.clearToolTip()
     return
 
-  let candidate = target.toolTipTarget()
-  if candidate == window.xToolTipTarget:
+  let
+    candidate = target.toolTipTarget(window.xContentView, contentPoint)
+    text =
+      if candidate.isNil:
+        ""
+      else:
+        candidate.toolTipAtPoint(
+          candidate.pointFromView(contentPoint, window.xContentView)
+        )
+  if candidate == window.xToolTipTarget and text == window.xToolTipText:
     if candidate.isNil:
       return
     if window.xToolTipOverlay.isNil or window.xToolTipOverlay.superview().isNil:
       window.xToolTipPoint = contentPoint
       window.scheduleToolTip()
-    elif window.xToolTipOverlay.xText != candidate.toolTip():
-      window.xToolTipOverlay.xText = candidate.toolTip()
-      window.xToolTipOverlay.needsDisplay = true
     return
 
   window.clearToolTip()
   if candidate.isNil:
     return
   window.xToolTipTarget = candidate
+  window.xToolTipText = text
   window.xToolTipPoint = contentPoint
   window.scheduleToolTip()
 
@@ -719,14 +731,21 @@ proc prepareToolTipForDisplay(window: Window) =
   if target.isNil:
     return
   if content.isNil or window.hasActiveTransientSession() or
-      not content.containsView(target) or target.toolTip().len == 0:
+      not content.containsView(target):
+    window.clearToolTip()
+    return
+  let text = window.currentToolTipText(target)
+  if text.len == 0:
     window.clearToolTip()
     return
   if window.xToolTipOverlay.isNil or window.xToolTipOverlay.superview() != content:
     return
 
   let contentBounds = content.bounds()
-  window.xToolTipOverlay.xText = target.toolTip()
+  window.xToolTipText = text
+  if window.xToolTipOverlay.xText != text:
+    window.xToolTipOverlay.xText = text
+    window.xToolTipOverlay.needsDisplay = true
   window.xToolTipOverlay.xAnchor = initPoint(
     window.xToolTipPoint.x - contentBounds.origin.x,
     window.xToolTipPoint.y - contentBounds.origin.y,

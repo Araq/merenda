@@ -454,6 +454,13 @@ template. The adapter owns edits, undo, and checking that source content is curr
 Hosts can route find shortcuts through `search.handleSearchKey(event)` and call
 `search.refreshSearch()` when their source changes.
 
+`SearchBar` is a regular `Box` containing standard text fields and buttons, arranged
+with `StackView`. For embedded controls, add `newSearchBar(frame = ...)` to a
+container (or use layout constraints) and set `hidden = false`. The host chooses
+whether it floats; query, error, and replacement changes do not override an
+embedded frame. `TextSearchController` anchors the floating controls with ordinary
+layout constraints, allowing their height to follow their content.
+
 ## Kosmo
 
 Kosmo is a code editor built with Merenda and Moe's Vim-style editing engine.
@@ -464,6 +471,22 @@ source to see how a larger Merenda app fits together.
 Use the Files and Find icons at the left of the status bar to switch sidebar
 views. Click the active icon again to collapse the sidebar and give the editor
 the full window width; click either icon to reopen it at its previous width.
+
+Opening a folder adds it as a project root in the Files sidebar. Right-click a
+project root and choose **Remove Project Root** to remove it from the workspace.
+Its files and open tabs stay intact; Quick Open and Find in Files use the remaining
+roots. You can remove every root and add folders again later.
+
+Right-click a file or folder and choose **Copy Full Path** or **Copy Relative Path**
+to copy its path to the clipboard. Relative paths start at the closest containing
+project root; a project root's own relative path is `.`.
+Hover over a file in the tree to see its relative path and any Git status details.
+
+Use `Ctrl-W h` from the leftmost editor or terminal pane to focus the visible Files
+or Find sidebar. `Ctrl-W l` returns to the adjacent pane. Control-key continuations
+and left/right arrows after `Ctrl-W` work too; navigation keeps the selected
+sidebar tab and leaves collapsed sidebars hidden.
+Clicking a passive area in a pane's content focuses its displayed document.
 
 Press `Cmd-F` on macOS or `Ctrl-F` elsewhere to search an editor, Markdown
 preview, Git diff, or GitHub tab. Use Enter / the arrow buttons to move through
@@ -488,6 +511,11 @@ can span lines; terminal expressions can span soft-wrapped output and retain
 the original cell positions, including wide Unicode characters.
 Terminal find centers older matches where possible and stays at the bottom for
 matches near the end of the history.
+
+Each editor pane keeps its own Find query and highlights, including when two
+panes show the same buffer. Navigating matches or closing Find affects that pane.
+Changing tabs rechecks the query without moving the caret.
+Searching copied text ends the editor's previous selection before moving to a match.
 
 Editor search and the Find sidebar open with replacement controls collapsed.
 Click the chevron beside the search field to expand or collapse them without

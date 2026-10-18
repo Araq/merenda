@@ -1803,7 +1803,10 @@ proc insertTextFromPasteboard*(textView: TextView, pasteboard: Pasteboard): bool
     let storage = pasteboard.textStorageForType(PasteboardTypeTextStorage)
     if storage.isNil:
       return false
-    textView.replaceRange(selected, storage)
+    if textView.isFieldEditor or not textView.richText:
+      textView.insertTextValue(storage.stringValue())
+    else:
+      textView.replaceRange(selected, storage)
     true
   of PasteboardTypeString:
     textView.insertTextValue(pasteboard.stringForType(PasteboardTypeString))
@@ -2956,7 +2959,7 @@ protocol DefaultTextViewDrawing of ViewDrawingProtocol:
   method drawOverlay(textView: TextView, context: DrawContext) =
     textView.drawTextViewOverlay(context)
 
-protocol DefaultTextViewEvents of ResponderEventProtocol:
+protocol DefaultTextViewMouseEvents of ResponderEventProtocol:
   method mouseDown(textView: TextView, event: MouseEvent): bool =
     if event.button == mbPrimary and (textView.editable or textView.selectable):
       if textView.clickTextAtPoint(event.location):
@@ -2980,6 +2983,7 @@ protocol DefaultTextViewEvents of ResponderEventProtocol:
       textView.xSelectingWithMouse = false
       return true
 
+protocol DefaultTextViewEvents of ResponderEventProtocol:
   method keyDown(textView: TextView, event: KeyEvent): bool =
     if textView.editable and event.shouldInsertText():
       textView.insertTextValue(event.text)
@@ -3511,6 +3515,7 @@ proc initTextViewFields*(
   discard textView.withProtocol(DefaultTextViewAccessibility)
   discard textView.withProtocol(DefaultTextViewCommandDispatch)
   discard textView.withProtocol(DefaultTextViewScrollNavigation)
+  discard textView.withProtocol(DefaultTextViewMouseEvents)
   discard textView.withProtocol(DefaultTextViewDraggingSource)
   discard textView.withProtocol(DefaultTextViewDraggingDestination)
   textView.installTextInputClientMethods()

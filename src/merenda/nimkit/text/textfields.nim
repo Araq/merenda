@@ -924,6 +924,15 @@ protocol DefaultTextFieldDrawing of ViewDrawingProtocol:
         manager.caretRect(textField.insertionPoint), style.text.color
       )
 
+proc forwardFieldEditorMouse(
+    textField: TextField, selector: MouseEventSelector, event: MouseEvent
+): bool =
+  let editor = textField.activeFieldEditor()
+  if not editor.isNil:
+    var editorEvent = event
+    editorEvent.location = editor.pointFromView(event.location, textField)
+    result = editor.handleMouse(selector, editorEvent)
+
 protocol DefaultTextFieldEvents of ResponderEventProtocol:
   method mouseDown(textField: TextField, event: MouseEvent): bool =
     if event.button == mbPrimary and (
@@ -932,14 +941,15 @@ protocol DefaultTextFieldEvents of ResponderEventProtocol:
       let owner = textField.window()
       if owner of Window:
         discard Window(owner).makeFirstResponder(textField, focusVisible = false)
-      let editor = textField.activeFieldEditor()
-      if not editor.isNil:
-        var editorEvent = event
-        editorEvent.location = editor.pointFromView(event.location, textField)
-        discard editor.handleMouse(mouseDown(), editorEvent)
-      else:
+      if not textField.forwardFieldEditorMouse(mouseDown(), event):
         textField.selectedRange = initTextRange(textField.runeCount, 0)
       return true
+
+  method mouseDragged(textField: TextField, event: MouseEvent): bool =
+    textField.forwardFieldEditorMouse(mouseDragged(), event)
+
+  method mouseUp(textField: TextField, event: MouseEvent): bool =
+    textField.forwardFieldEditorMouse(mouseUp(), event)
 
   method keyDown(textField: TextField, event: KeyEvent): bool =
     if textField.isEditable() and event.modifiers - {kmShift} == {} and

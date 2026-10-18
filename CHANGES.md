@@ -25,6 +25,53 @@
 - Keep arranged identity lookups proportional to visible items: defer hidden
   source identities and use generation stamps to discard stale visible positions.
 
+## 0.27.6
+
+- Focus the displayed document when clicking passive areas in a pane's content,
+  including GitHub and Git diff readers beside a focused terminal.
+
+- Show project-relative file paths in file-tree hover tooltips, preserving Git
+  status details and using the same closest project root as Copy Relative Path.
+  Connect outline item tooltips to NimKit's shared hover display.
+
+- Keep editor Find scoped to its pane, including its query, highlights, errors,
+  and match navigation when other panes repaint or search the same buffer.
+  Closing Find in one pane preserves the other panes' searches. Switching tabs
+  rechecks matches without moving the restored cursor.
+
+- End Moe's active Visual selection before GUI Find moves to a match, so copying
+  selected text into Find does not select the intervening document text.
+
+- Resolve internal layout anchors after manual containers resize their content,
+  keeping nested widgets in the same layout pass without repeated global layout.
+
+- Compose reusable search bars with standard Box and StackView layout. Let hosts
+  choose floating or embedded placement, measure expanded and error states from
+  their content, and keep floating bars within narrow panes.
+
+- Keep Git diff document navigation out of focused search controls, so Tab and
+  arrow keys preserve query focus and caret movement after pasting.
+
+- Keep StackView keyboard traversal aligned with arranged insertion and reordering
+  without detaching focused controls.
+
+- Keep pasted text in ordinary text fields at the field's font and color, isolate
+  undo history between editing sessions, and use shared text-view mouse selection
+  so dragging over text replaces the selected range correctly.
+
+- Add Copy Full Path and Copy Relative Path to Kosmo's file-tree context menu.
+  Relative paths use the closest containing project root, including nested roots.
+
+- Let Kosmo's Files/Find sidebar shrink to 128 points, 20% narrower than before.
+
+- Include the visible Files or Find sidebar in Kosmo's Ctrl-W h/l pane focus
+  navigation, including Control and arrow aliases. Keep the selected sidebar tab
+  and search text, and use Ctrl-W l to return to the adjacent editor or terminal.
+
+- Add "Remove Project Root" to Kosmo's file-tree context menu. Removing a root
+  updates the browser, Quick Open, file search, and Git monitoring while keeping
+  its files and open tabs.
+
 ## 0.27.5
 
 - Start the GitHub viewer with Issues and Pull Requests expanded and individual

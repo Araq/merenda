@@ -83,15 +83,6 @@ proc activeEditorView(controller: KosmoDockController): KosmoEditorView =
   if not group.isNil:
     result = group.editorView
 
-# Translate Kosmo's namespaced editing actions to NimKit commands so the
-# focused text field handles them before they reach the underlying editor.
-protocol KosmoFieldEditorCommandDispatch of nimkit.ResponderCommandDispatchProtocol:
-  method dispatchCommand(
-      editor: nimkit.FieldEditor, args: nimkit.TryToPerformArgs
-  ): bool =
-    let selector = args.selector.nativeEditingCommand().get(args.selector)
-    editor.sendLocalIfHandled(selector, nimkit.ActionArgs(sender: args.sender))
-
 proc installShortcutBindings(controller: KosmoDockController, window: nimkit.Window) =
   discard window.fieldEditor().withProtocol(KosmoFieldEditorCommandDispatch)
   var bindings = window.keyBindings()
@@ -811,15 +802,14 @@ proc spanOffset(center, spanMin, spanMax: float32): float32 =
 
 proc spatialNeighborGroup(
     controller: KosmoDockController,
-    source: KosmoEditorGroup,
+    workspace: nimkit.DockView,
+    sourceRect: nimkit.Rect,
     direction: KosmoPaneCommand,
 ): KosmoEditorGroup =
   ## Nearest pane in the given direction, or nil. A neighbor must overlap the
   ## source along the perpendicular axis; ties prefer the candidate center
   ## closest to the source span, then the topmost (horizontal) or leftmost
   ## (vertical) pane.
-  source.workspace.layoutSubtreeIfNeeded()
-  let sourceRect = source.panel.rectToView(source.panel.bounds(), source.workspace)
   let horizontal = direction in {kpcFocusLeft, kpcFocusRight}
   var
     target: KosmoEditorGroup
@@ -827,10 +817,9 @@ proc spatialNeighborGroup(
     bestOffset = float32.high
     bestCenter = float32.high
   for candidate in controller.groups:
-    if candidate == source or candidate.workspace != source.workspace:
+    if candidate.workspace != workspace:
       continue
-    let candidateRect =
-      candidate.panel.rectToView(candidate.panel.bounds(), candidate.workspace)
+    let candidateRect = candidate.panel.rectToView(candidate.panel.bounds(), workspace)
     # A directional neighbor must overlap along the perpendicular axis.
     let overlaps =
       if horizontal:
@@ -869,12 +858,43 @@ proc spatialNeighborGroup(
       target = candidate
   target
 
+proc spatialNeighborGroup(
+    controller: KosmoDockController,
+    source: KosmoEditorGroup,
+    direction: KosmoPaneCommand,
+): KosmoEditorGroup =
+  source.workspace.layoutSubtreeIfNeeded()
+  let sourceRect = source.panel.rectToView(source.panel.bounds(), source.workspace)
+  controller.spatialNeighborGroup(source.workspace, sourceRect, direction)
+
+proc focusFromSidebar(controller: KosmoDockController): bool =
+  if controller.isNil or controller.frontend.isNil:
+    return
+  let frontend = controller.frontend[]
+  frontend.contentView.layoutSubtreeIfNeeded()
+  let sourceRect =
+    frontend.sidebarPane.rectToView(frontend.sidebarPane.bounds(), frontend.dockView)
+  controller.focusGroup(
+    controller.spatialNeighborGroup(frontend.dockView, sourceRect, kpcFocusRight)
+  )
+
 proc focusSpatialGroup(
     controller: KosmoDockController,
     source: KosmoEditorGroup,
     direction: KosmoPaneCommand,
 ): bool =
-  controller.focusGroup(controller.spatialNeighborGroup(source, direction))
+  let target = controller.spatialNeighborGroup(source, direction)
+  if not target.isNil:
+    return controller.focusGroup(target)
+  if direction == kpcFocusLeft and not controller.frontend.isNil:
+    let frontend = controller.frontend[]
+    if source.window == frontend.window and frontend.hasFileBrowser() and
+        not frontend.splitView.isPaneCollapsed(0):
+      result =
+        if frontend.sidebarTabs.selectedIndex == 1:
+          frontend.searchPanel.focusQuery()
+        else:
+          frontend.window.makeFirstResponder(frontend.fileTree)
 
 proc focusPaneTabStrip(controller: KosmoDockController, group: KosmoEditorGroup): bool =
   ## Activate the pane and move keyboard focus to its etab strip.
