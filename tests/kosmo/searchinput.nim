@@ -1,6 +1,6 @@
 ## Search controls exercised through the same keyboard dispatch as user input.
 
-import std/[strutils, unicode, unittest]
+import std/[options, strutils, unicode, unittest]
 
 import figdraw
 import merenda/nimkit
@@ -10,6 +10,19 @@ import fixtures/ui
 func center(bounds: Rect): Point =
   initPoint(
     bounds.origin.x + bounds.size.width / 2, bounds.origin.y + bounds.size.height / 2
+  )
+
+proc pointForBufferPosition(view: KosmoEditorView, line, column: int): Point =
+  require view.editor.revealLocation(line, column)
+  view.refresh()
+  let
+    cursor = view.editor.cursor()
+    metrics = view.monoTextMetrics()
+  view.pointToWindow(
+    initPoint(
+      (cursor.column.float32 + 0.5'f32) * metrics.cellWidth,
+      (cursor.row.float32 + 0.5'f32) * metrics.lineHeight,
+    )
   )
 
 proc pressSearchKey(
@@ -102,6 +115,58 @@ template withSearchClipboard(body: untyped) =
     body
 
 suite "Kosmo search synthetic input":
+  for reversed in [false, true]:
+    test "copy Find paste replaces the editor selection when reversed=" & $reversed:
+      let
+        frontend = newSearchInputFrontend()
+        window = frontend.window
+        view = frontend.editorView
+        editor = view.editor
+        source = "needle alpha\nmiddle text\nneedle omega"
+        modifiers = frontend.shortcutProfile().primaryModifiers()
+      defer:
+        frontend.close()
+      require editor.handleKey("i")
+      require editor.handleTextInput(source)
+      require editor.handleKey("Esc")
+      require editor.revealLocation(0, 0)
+      view.refresh()
+      let
+        first = view.pointForBufferPosition(0, if reversed: 5 else: 0)
+        last = view.pointForBufferPosition(0, if reversed: 0 else: 5)
+        bufferId = editor.tabs()[0].id
+      require window.mouseDownAt(first)
+      require window.mouseDraggedAt(last)
+      require window.mouseUpAt(last)
+      require editor.selectedText() == "needle"
+      require editor.mode() == KosmoEditorMode.Visual
+      withSearchClipboard:
+        require window.pressSearchKey(keyC, modifiers)
+        require pasteboard.plainText() == "needle"
+        require window.pressSearchKey(keyF, modifiers)
+        require window.searchFieldFocused(view.searchField())
+        require window.pressSearchKey(keyV, modifiers)
+        check view.searchField().text() == "needle"
+        check editor.bufferCursor() == KosmoBufferCursor(line: 2, column: 0)
+        check editor.currentSelection().isNone
+        check editor.selectedText() == ""
+        check editor.mode() == KosmoEditorMode.Normal
+        for key in [keyArrowDown, keyArrowUp]:
+          require window.pressSearchKey(key)
+          check editor.currentSelection().isNone
+          check editor.selectedText() == ""
+        check editor.bufferCursor() == KosmoBufferCursor(line: 2, column: 0)
+        require window.pressSearchKey(keyA, modifiers)
+        require window.pressSearchKey(keyBackspace)
+        check editor.currentSelection().isNone
+        window.typeSearchText("needle")
+        require window.pressSearchKey(keyEscape)
+        check not view.searchVisible()
+        check editor.currentSelection().isNone
+        check editor.selectedText() == ""
+        check editor.bufferText(bufferId).get() == source
+        check pasteboard.plainText() == "needle"
+
   for styled in [false, true]:
     test "Git diff search pastes and renders " & (if styled: "styled" else: "plain") &
       " clipboard text":

@@ -1616,6 +1616,7 @@ proc searchFrom*(
   ## Search with literal text or opt-in Reni expressions, centering the result.
   if editor.isNil or editor.editor.isNil or query.len == 0:
     return
+  editor.resetBufferSelection()
   if not editor.revealLocation(start.line, start.column) or
       not editor.prepareSearch(query, regularExpression):
     return

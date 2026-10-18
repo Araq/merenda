@@ -510,6 +510,8 @@ the original cell positions, including wide Unicode characters.
 Terminal find centers older matches where possible and stays at the bottom for
 matches near the end of the history.
 
+Searching copied text ends the editor's previous selection before moving to a match.
+
 Editor search and the Find sidebar open with replacement controls collapsed.
 Click the chevron beside the search field to expand or collapse them without
 clearing the query or results. On macOS, `Option-Cmd-F` opens editor replacement

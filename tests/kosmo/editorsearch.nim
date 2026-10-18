@@ -12,6 +12,26 @@ proc isFocused(window: Window, control: View): bool =
     (window.firstResponder() == control or window.fieldEditorClient() == control)
 
 suite "Kosmo editor search":
+  test "GUI search collapses character line and block selections before moving":
+    for visualKey in ["v", "V", "C-v"]:
+      checkpoint "Selection mode " & visualKey
+      let
+        source = "needle alpha\nmiddle text\nneedle omega"
+        editor = newKosmoEditor(text = source)
+      defer:
+        editor.close()
+      require editor.handleKey(visualKey)
+      require editor.handleKey("l")
+      require editor.currentSelection().isSome
+      let copied = editor.copySelection()
+      require copied.len > 0
+      require editor.searchFrom("needle", editor.bufferCursor())
+      check editor.bufferCursor() == KosmoBufferCursor(line: 2, column: 0)
+      check editor.currentSelection().isNone
+      check editor.selectedText() == ""
+      check editor.mode() == KosmoEditorMode.Normal
+      check editor.bufferText(editor.tabs()[0].id).get() == source
+
   test "search tab navigation does not reach the active editor input mode":
     let frontend = newKosmoApplication(
       newApplication("Search tab navigation"), monitorsGitStatus = false

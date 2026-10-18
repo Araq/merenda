@@ -4,6 +4,9 @@
 
 ## 0.27.6
 
+- End Moe's active Visual selection before GUI Find moves to a match, so copying
+  selected text into Find does not select the intervening document text.
+
 - Resolve internal layout anchors after manual containers resize their content,
   keeping nested widgets in the same layout pass without repeated global layout.
 
