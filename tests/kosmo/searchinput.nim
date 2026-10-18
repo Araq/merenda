@@ -1,10 +1,16 @@
 ## Search controls exercised through the same keyboard dispatch as user input.
 
-import std/[unicode, unittest]
+import std/[strutils, unicode, unittest]
 
+import figdraw
 import merenda/nimkit
 import merenda/kosmo/kosmo
 import fixtures/ui
+
+func center(bounds: Rect): Point =
+  initPoint(
+    bounds.origin.x + bounds.size.width / 2, bounds.origin.y + bounds.size.height / 2
+  )
 
 proc pressSearchKey(
     window: Window, key: Key, modifiers: set[nimkit.KeyModifier] = {}
@@ -22,11 +28,26 @@ proc pressSearchKey(
 proc typeSearchText(window: Window, text: string) =
   for rune in text.runes:
     let value = rune.toUTF8()
-    discard window.dispatchKeyDown(
-      KeyEvent(key: keyForText(value), keyCode: keyCodeForText(value))
-    )
+    let event = KeyEvent(key: keyForText(value), keyCode: keyCodeForText(value))
+    discard window.dispatchKeyDown(event)
     require window.dispatchTextInput(value)
+    discard window.dispatchKeyUp(event)
     discard window.buildRenders()
+
+proc checkSearchTextRendering(window: Window, field: TextField, expected: string) =
+  check field.text() == expected
+  var matchingNodes = 0
+  for node in window.buildRenders()[DefaultDrawLevel].nodes:
+    if node.kind == nkText:
+      var rendered: string
+      for index in 0 ..< node.textLayout.glyphCount():
+        rendered.add node.textLayout.displayRune(index).toUTF8()
+      if rendered == expected:
+        inc matchingNodes
+  check matchingNodes == 1
+
+proc searchFieldFocused(window: Window, field: TextField): bool =
+  window.fieldEditorClient() == field
 
 proc newSearchInputFrontend(): KosmoApplication =
   result = newKosmoApplication(
@@ -72,6 +93,144 @@ template withSearchClipboard(body: untyped) =
     body
 
 suite "Kosmo search synthetic input":
+  for styled in [false, true]:
+    test "Git diff search pastes and renders " & (if styled: "styled" else: "plain") &
+      " clipboard text":
+      let
+        frontend = newSearchInputFrontend()
+        window = frontend.window
+        diff = newKosmoGitDiffPanel(
+          parseGitDiff(
+            "diff --git a/example.nim b/example.nim\n@@ -1 +1 @@\n-old\n" &
+              "+ensureArrangement " & repeat("controller.xItems ", 80) & "\n"
+          )
+        )
+      defer:
+        frontend.close()
+        diff.close()
+      require frontend.openDocument(
+        newKosmoPaneDocument(
+          "test.search-paste",
+          "Git Diff",
+          diff,
+          preferredFirstResponder = diff.markdownView.textView(),
+        )
+      )
+      require diff.waitForDiff()
+      discard window.buildRenders()
+      require window.makeFirstResponder(diff.markdownView.textView())
+      let modifiers = frontend.shortcutProfile().primaryModifiers()
+      require window.pressSearchKey(keyF, modifiers)
+      let field = diff.searchField()
+      withSearchClipboard:
+        for value in ["ensureArrangement", " λ ensureArrangement "]:
+          checkpoint "Pasting " & repr(value)
+          require window.searchFieldFocused(field)
+          require pasteboard.replaceWithPlainText(value)
+          if styled:
+            let storage =
+              newTextStorage(value, defaultTextAttributes(color(1, 0, 0), 48))
+            require pasteboard.setTextStorage(PasteboardTypeTextStorage, storage)
+          require window.pressSearchKey(keyA, modifiers)
+          require window.pressSearchKey(keyV, modifiers)
+          require diff.waitForDiff()
+          window.checkSearchTextRendering(field, value)
+          check field.selectedRange() == initTextRange(value.runeLen, 0)
+          let editor = TextView(field.currentEditor())
+          let caret =
+            editor.rectToWindow(editor.layoutManager().caretRect(value.runeLen))
+          check caret.minX >= field.rectToWindow(field.bounds()).minX
+          check caret.maxX <= field.rectToWindow(field.bounds()).maxX
+          let scrollOffset = diff.scrollView.contentOffset()
+          require window.pressSearchKey(keyArrowLeft)
+          check field.selectedRange() == initTextRange(value.runeLen - 1, 0)
+          require window.pressSearchKey(keyArrowRight)
+          check field.selectedRange() == initTextRange(value.runeLen, 0)
+          check diff.scrollView.contentOffset() == scrollOffset
+          require window.pressSearchKey(keyTab)
+          require window.pressSearchKey(keyTab, {nimkit.kmShift})
+          require window.searchFieldFocused(field)
+          window.checkSearchTextRendering(field, value)
+        require window.pressSearchKey(keyEscape)
+        require window.pressSearchKey(keyF, modifiers)
+        window.checkSearchTextRendering(field, " λ ensureArrangement ")
+
+  test "Git diff floating search renders each edit and replaces mouse selections":
+    let
+      frontend = newSearchInputFrontend()
+      window = frontend.window
+      diff = newKosmoGitDiffPanel(
+        parseGitDiff(
+          "diff --git a/example.nim b/example.nim\n@@ -1 +1 @@\n-old\n" &
+            "+ensureArrangement controller.xItems\n"
+        )
+      )
+    defer:
+      frontend.close()
+      diff.close()
+    require frontend.openDocument(
+      newKosmoPaneDocument(
+        "test.search-rendering",
+        "Git Diff",
+        diff,
+        preferredFirstResponder = diff.markdownView.textView(),
+      )
+    )
+    require diff.waitForDiff()
+    discard window.buildRenders()
+    require window.makeFirstResponder(diff.markdownView.textView())
+    require window.pressSearchKey(keyF, frontend.shortcutProfile().primaryModifiers())
+    let field = diff.searchField()
+    require window.fieldEditorClient() == field
+    var query: string
+    for rune in "ensureArrangement".runes:
+      let value = rune.toUTF8()
+      window.typeSearchText(value)
+      query.add value
+      require diff.waitForDiff()
+      check field.selectedRange() == initTextRange(query.runeLen, 0)
+      window.checkSearchTextRendering(field, query)
+
+    let
+      editor = TextView(field.currentEditor())
+      start = editor.layoutManager().caretRect(6)
+      finish = editor.layoutManager().caretRect(17)
+      firstPoint = editor.pointToWindow(start.center())
+      lastPoint = editor.pointToWindow(finish.center())
+    require window.mouseDownAt(firstPoint)
+    require window.mouseDraggedAt(lastPoint)
+    require window.mouseUpAt(lastPoint)
+    check field.selectedRange() == initTextRange(6, 11)
+    window.typeSearchText("Layout")
+    window.checkSearchTextRendering(field, "ensureLayout")
+
+    let regex = diff.buttonWithLabel("Use Reni regular expressions")
+    require window.clickAt(regex.pointToWindow(regex.bounds().center()))
+    require window.pressSearchKey(keyA, frontend.shortcutProfile().primaryModifiers())
+    window.typeSearchText("[")
+    check not diff.buttonWithLabel("Next Git diff match").enabled()
+    window.checkSearchTextRendering(field, "[")
+    require window.pressSearchKey(keyBackspace)
+    window.typeSearchText("ensureArrangement")
+    require diff.waitForDiff()
+    check diff.searchMatchCount() == 1
+    window.checkSearchTextRendering(field, "ensureArrangement")
+
+    for width in [560.0'f32, 1000.0'f32]:
+      frontend.contentView.frame = rect(0, 0, width, 600)
+      frontend.contentView.layoutSubtreeIfNeeded()
+      field.containingSearchBar().checkVisibleIn(diff)
+      window.checkSearchTextRendering(field, "ensureArrangement")
+    require window.pressSearchKey(keyEscape)
+    require window.pressSearchKey(keyF, frontend.shortcutProfile().primaryModifiers())
+    window.typeSearchText(" λ ensureArrangement ")
+    require window.pressSearchKey(keyTab)
+    require window.pressSearchKey(keyTab, {nimkit.kmShift})
+    window.checkSearchTextRendering(field, " λ ensureArrangement ")
+    check frontend.editorView.editor
+    .bufferText(frontend.editorView.editor.tabs()[0].id)
+    .get() == ""
+
   for inFiles in [false, true]:
     let panelName = if inFiles: "file search" else: "editor search"
     for replacing in [false, true]:

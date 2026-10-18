@@ -4,6 +4,9 @@
 
 ## 0.27.6
 
+- Keep Git diff document navigation out of focused search controls, so Tab and
+  arrow keys preserve query focus and caret movement after pasting.
+
 - Keep StackView keyboard traversal aligned with arranged insertion and reordering
   without detaching focused controls.
 
