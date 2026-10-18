@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Add a Windows VirtualBox test setup, matching Guest Additions, an OpenGL 3.3
+  console probe, and guards against concurrent bhyve operation. Document the
+  failed GPU acceleration test with the FreeBSD 7.2.20 packages.
+- Add a reproducible Windows Server evaluation VM setup for bhyve, with
+  unattended installation, private RDP/SSH access, ZFS reset helpers, and GPU
+  passthrough configuration and verification instructions.
+- Share typed collection storage, identity indexes, arrangement caching, and
+  mutation invalidation between NimKit TableModel and ArrayController. Repeated
+  controller lookups now reuse the filtered/sorted arrangement until a model
+  mutation; public model APIs, typed edit writeback, and notifications remain
+  available. Reassign a filter after changing external state captured by it.
+- Maintain shared collection identity indexes during mutations, allocate them
+  only for identity queries, and reuse arrangement storage. Cached reads and
+  unsorted refreshes avoid comparator closure allocations. Field projections
+  borrow values instead of creating temporary ObjectValue copies.
+- Keep arranged identity lookups proportional to visible items: defer hidden
+  source identities and use generation stamps to discard stale visible positions.
+
 ## 0.27.6
 
 - Show project-relative file paths in file-tree hover tooltips, preserving Git
