@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.27.6
+
 - Add Copy Full Path and Copy Relative Path to Kosmo's file-tree context menu.
   Relative paths use the closest containing project root, including nested roots.
 
