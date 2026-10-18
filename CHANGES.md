@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Let Kosmo's Files/Find sidebar shrink to 128 points, 20% narrower than before.
+
 - Include the visible Files or Find sidebar in Kosmo's Ctrl-W h/l pane focus
   navigation, including Control and arrow aliases. Keep the selected sidebar tab
   and search text, and use Ctrl-W l to return to the adjacent editor or terminal.

@@ -1103,7 +1103,7 @@ proc newKosmoApplication*(
 
   if hasFileBrowser:
     splitView.addPane(
-      sidebarPane, minSize = 160.0'f32, maxSize = 420.0'f32, collapsible = true
+      sidebarPane, minSize = 128.0'f32, maxSize = 420.0'f32, collapsible = true
     )
   splitView.addPane(dockView, minSize = 320.0'f32)
 
