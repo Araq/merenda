@@ -1959,11 +1959,6 @@ protocol KosmoEditorTabsDelegate of nimkit.DocumentTabsDelegate:
     if not handler.dockController.isNil:
       handler.dockController[].finishDockDrag(tabs, info.item, info.location)
 
-protocol KosmoEditorViewLayout of nimkit.ViewLayoutProtocol:
-  method layoutSubviews(view: KosmoEditorView) =
-    if not view.searchBar.isNil:
-      view.searchBar.layoutInBounds(view.bounds())
-
 ## Moe editor panes are entered with Return on an etab or with a click; they
 ## stay out of the window key view loop so Tab never lands inside the editor.
 protocol KosmoEditorKeyViewParticipation of nimkit.ViewProtocol:
@@ -1993,7 +1988,6 @@ proc newKosmoEditorView*(editor = newKosmoEditor()): KosmoEditorView =
   discard result.withProtocol(KosmoEditorInput)
   discard result.withProtocol(KosmoEditorEditingCommands)
   discard result.withProtocol(KosmoEditorCommandDispatch)
-  discard result.withProtocol(KosmoEditorViewLayout)
   discard result.withProtocol(KosmoEditorKeyViewParticipation)
   let keyEquivalentMethod: nimkit.DynamicMethod = proc(
       self: nimkit.DynamicAgent, invocation: var nimkit.Invocation
@@ -2052,6 +2046,31 @@ proc newKosmoEditorView*(editor = newKosmoEditor()): KosmoEditorView =
     ,
   )
   result.addSubview(result.searchBar)
+  let
+    bar = result.searchBar
+    insetPriority = nimkit.initLayoutPriority(999)
+  nimkit.activate(
+    [
+      bar[nimkit.atLeft].greaterThanOrEqualTo(result[nimkit.atLeft]),
+      bar[nimkit.atTop].greaterThanOrEqualTo(result[nimkit.atTop]),
+      bar[nimkit.atRight].lessThanOrEqualTo(result[nimkit.atRight]),
+      bar[nimkit.atBottom].lessThanOrEqualTo(result[nimkit.atBottom]),
+      bar[nimkit.atWidth].lessThanOrEqualTo(nimkit.SearchBarWidth),
+      bar[nimkit.atTop].equalTo(
+        result[nimkit.atTop], constant = nimkit.SearchBarInset, priority = insetPriority
+      ),
+      bar[nimkit.atRight].equalTo(
+        result[nimkit.atRight],
+        constant = -nimkit.SearchBarInset,
+        priority = insetPriority,
+      ),
+      bar[nimkit.atWidth].lessThanOrEqualTo(
+        result[nimkit.atWidth],
+        constant = -2 * nimkit.SearchBarInset,
+        priority = insetPriority,
+      ),
+    ]
+  )
   result.syncChrome()
 
 protocol KosmoCommandBarHitTesting of nimkit.ViewProtocol:

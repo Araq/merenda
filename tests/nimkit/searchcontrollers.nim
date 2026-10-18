@@ -3,6 +3,36 @@ import std/[options, strutils, unittest]
 import merenda/nimkit
 
 suite "NimKit reusable search":
+  test "floating search tolerates collapsed hosts and releases its constraints":
+    let
+      host = newView(frame = rect(0, 0, 0, 0))
+      originalConstraints = host.constraints().len
+      search = newTextSearchController(
+        host,
+        "records",
+        TextSearchAdapter(
+          sources: proc(): seq[string] =
+            @["needle"]
+        ),
+      )
+    defer:
+      search.close()
+    search.bar.hidden = false
+    for size in [initSize(0, 0), initSize(16, 20), initSize(640, 360)]:
+      host.frame = rect(initPoint(0, 0), size)
+      host.layoutSubtreeIfNeeded()
+      let frame = search.bar.frame()
+      check frame.minX >= -0.01
+      check frame.minY >= -0.01
+      check frame.maxX <= size.width + 0.01
+      check frame.maxY <= size.height + 0.01
+      check not host.layoutFeedbackBlocked()
+    check search.bar.frame().size.width == SearchBarWidth
+    search.close()
+    check host.constraints().len == originalConstraints
+    host.layoutSubtreeIfNeeded()
+    check not host.needsLayout()
+
   test "floating search respects narrow hosts and settles after error transitions":
     for width in [320.0'f32, 400.0'f32]:
       let

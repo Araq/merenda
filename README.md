@@ -458,7 +458,8 @@ Hosts can route find shortcuts through `search.handleSearchKey(event)` and call
 with `StackView`. For embedded controls, add `newSearchBar(frame = ...)` to a
 container (or use layout constraints) and set `hidden = false`. The host chooses
 whether it floats; query, error, and replacement changes do not override an
-embedded frame.
+embedded frame. `TextSearchController` anchors the floating controls with ordinary
+layout constraints, allowing their height to follow their content.
 
 ## Kosmo
 

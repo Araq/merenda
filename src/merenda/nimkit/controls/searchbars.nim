@@ -245,20 +245,6 @@ proc `hasMatches=`*(bar: SearchBar, hasMatches: bool) =
       bar.replaceButton.enabled = hasMatches and bar.xErrorMessage.len == 0
       bar.replaceAllButton.enabled = bar.replaceButton.enabled
 
-proc layoutInBounds*(bar: SearchBar, bounds: Rect) =
-  ## Explicit placement helper for hosts that present the widget as an overlay.
-  let
-    availableWidth = max(bounds.size.width - SearchBarInset * 2.0'f32, 1.0'f32)
-    width = min(SearchBarWidth, availableWidth)
-    height = min(bar.sizeThatFits().height, bounds.size.height)
-  bar.autoresizingMaskConstraints = true
-  bar.frame = rect(
-    max(bounds.size.width - width - SearchBarInset, 0.0'f32),
-    min(SearchBarInset, max(bounds.size.height - height, 0.0'f32)),
-    width,
-    height,
-  )
-
 proc `errorMessage=`*(bar: SearchBar, message: string) =
   if bar.xErrorMessage == message:
     return

@@ -306,7 +306,6 @@ protocol GitHubLayout of nimkit.ViewLayoutProtocol:
     panel.markdownView.setFrameFromLayout(
       nimkit.rect(0, 44, bounds.size.width, max(bounds.size.height - 44, 0))
     )
-    panel.search.bar.layoutInBounds(bounds)
 
 proc newGitHubFilterItem(
     panel: WeakRef[KosmoGitHubPanel],

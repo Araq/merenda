@@ -49,6 +49,15 @@ proc checkSearchTextRendering(window: Window, field: TextField, expected: string
 proc searchFieldFocused(window: Window, field: TextField): bool =
   window.fieldEditorClient() == field
 
+proc checkFloatingSearch(bar: SearchBar, host: View) =
+  bar.checkVisibleIn(host)
+  check abs(bar.frame().minY - SearchBarInset) < 0.01
+  check abs(bar.frame().maxX - (host.bounds().maxX - SearchBarInset)) < 0.01
+  check abs(
+    bar.frame().size.width -
+      min(SearchBarWidth, host.bounds().size.width - 2 * SearchBarInset)
+  ) < 0.01
+
 proc newSearchInputFrontend(): KosmoApplication =
   result = newKosmoApplication(
     newApplication("Kosmo search synthetic input"), monitorsGitStatus = false
@@ -219,7 +228,7 @@ suite "Kosmo search synthetic input":
     for width in [560.0'f32, 1000.0'f32]:
       frontend.contentView.frame = rect(0, 0, width, 600)
       frontend.contentView.layoutSubtreeIfNeeded()
-      field.containingSearchBar().checkVisibleIn(diff)
+      field.containingSearchBar().checkFloatingSearch(diff)
       window.checkSearchTextRendering(field, "ensureArrangement")
     require window.pressSearchKey(keyEscape)
     require window.pressSearchKey(keyF, frontend.shortcutProfile().primaryModifiers())
@@ -266,6 +275,12 @@ suite "Kosmo search synthetic input":
           check field.text() == "prefix  λ needle "
           check frontend.editorView.editor.bufferText(bufferId).get == ""
           check frontend.editorView.editor.mode() == KosmoEditorMode.Normal
+        if not inFiles:
+          for width in [560.0'f32, 1000.0'f32]:
+            frontend.contentView.frame = rect(0, 0, width, 600)
+            frontend.contentView.layoutSubtreeIfNeeded()
+            field.containingSearchBar().checkFloatingSearch(frontend.editorView)
+            check field.text() == "prefix  λ needle "
 
       test panelName & " " & fieldName & " owns select all copy cut undo redo and paste":
         checkpoint "inFiles=" & $inFiles & ", replacing=" & $replacing
@@ -300,7 +315,10 @@ suite "Kosmo search synthetic input":
           check pasteboard.plainText() == "λ needle"
           require window.pressSearchKey(keyZ, modifiers)
           check field.text() == "λ needle"
-          require window.pressSearchKey(keyZ, modifiers + {nimkit.kmShift})
+          if nimkit.kmCommand in modifiers:
+            require window.pressSearchKey(keyZ, modifiers + {nimkit.kmShift})
+          else:
+            require window.pressSearchKey(keyY, modifiers)
           check field.text() == ""
           require window.pressSearchKey(keyV, modifiers)
           check field.text() == "λ needle"

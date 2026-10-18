@@ -215,40 +215,50 @@ suite "nimkit text fields":
     check field.text() == "ensureArrangement"
 
   test "shared field editor keeps undo and redo within the current editing session":
-    let
-      window = newWindow("Field editor history", frame = rect(0, 0, 420, 180))
-      root = newView(frame = rect(0, 0, 420, 180))
-      first = newTextField("", frame = rect(20, 20, 320, 34))
-      second = newTextField("", frame = rect(20, 70, 320, 34))
-      undo = KeyEvent(key: keyZ, keyCode: keyZ.ord, modifiers: shortcutModifiers())
-      redo = KeyEvent(
-        key: keyZ, keyCode: keyZ.ord, modifiers: shortcutModifiers() + {kmShift}
+    for profile in KeyBindingProfile:
+      checkpoint $profile
+      let
+        window = newWindow("Field editor history", frame = rect(0, 0, 420, 180))
+        root = newView(frame = rect(0, 0, 420, 180))
+        first = newTextField("", frame = rect(20, 20, 320, 34))
+        second = newTextField("", frame = rect(20, 70, 320, 34))
+        modifiers =
+          if profile == kbpMacOS:
+            {kmCommand}
+          else:
+            {kmControl}
+        undo = KeyEvent(key: keyZ, keyCode: keyZ.ord, modifiers: modifiers)
+        redo =
+          if profile == kbpMacOS:
+            KeyEvent(key: keyZ, keyCode: keyZ.ord, modifiers: modifiers + {kmShift})
+          else:
+            KeyEvent(key: keyY, keyCode: keyY.ord, modifiers: modifiers)
+      defer:
+        window.close()
+      window.setKeyBindingProfile(profile)
+      root.addSubview(first)
+      root.addSubview(second)
+      window.setContentView(root)
+      require window.makeFirstResponder(first)
+      require window.dispatchTextInput("ensureArrangement")
+      require window.dispatchKeyDown(undo)
+      check first.text() == ""
+      require window.dispatchKeyDown(KeyEvent(key: keyTab, keyCode: keyTab.ord))
+      require window.fieldEditorClient() == second
+      discard window.dispatchKeyDown(redo)
+      check second.text() == ""
+      require window.dispatchTextInput("replacement")
+      require window.dispatchKeyDown(undo)
+      check second.text() == ""
+      require window.dispatchKeyDown(redo)
+      check second.text() == "replacement"
+      require window.dispatchKeyDown(
+        KeyEvent(key: keyTab, keyCode: keyTab.ord, modifiers: {kmShift})
       )
-    defer:
-      window.close()
-    root.addSubview(first)
-    root.addSubview(second)
-    window.setContentView(root)
-    require window.makeFirstResponder(first)
-    require window.dispatchTextInput("ensureArrangement")
-    require window.dispatchKeyDown(undo)
-    check first.text() == ""
-    require window.dispatchKeyDown(KeyEvent(key: keyTab, keyCode: keyTab.ord))
-    require window.fieldEditorClient() == second
-    discard window.dispatchKeyDown(redo)
-    check second.text() == ""
-    require window.dispatchTextInput("replacement")
-    require window.dispatchKeyDown(undo)
-    check second.text() == ""
-    require window.dispatchKeyDown(redo)
-    check second.text() == "replacement"
-    require window.dispatchKeyDown(
-      KeyEvent(key: keyTab, keyCode: keyTab.ord, modifiers: {kmShift})
-    )
-    require window.fieldEditorClient() == first
-    discard window.dispatchKeyDown(undo)
-    check first.text() == ""
-    check second.text() == "replacement"
+      require window.fieldEditorClient() == first
+      discard window.dispatchKeyDown(undo)
+      check first.text() == ""
+      check second.text() == "replacement"
 
   test "field editor mouse drags select text for replacement in either direction":
     let

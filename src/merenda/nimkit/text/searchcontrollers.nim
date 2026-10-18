@@ -8,7 +8,7 @@ import ../controls/searchbars
 import ../foundation/[events, types]
 import ../responder/keybindings
 import ./[textfields, textlayout, textviews]
-import ../view/[viewgeometry, views]
+import ../view/[viewconstraints, viewgeometry, views]
 import ./searchmatching
 
 export searchbars, searchmatching
@@ -32,6 +32,7 @@ type
   TextSearchController* = ref object of Agent ## Retained search state and controls.
     bar*: SearchBar
     host: WeakRef[View]
+    floatingConstraints: seq[LayoutConstraint]
     adapter: TextSearchAdapter
     caseSensitive: bool
     matches: seq[TextSearchLocation]
@@ -105,17 +106,6 @@ proc dismissSearch*(search: TextSearchController) =
     if owner of Window:
       discard Window(owner).makeFirstResponder(search.host[])
 
-proc layoutSearch(search: TextSearchController) {.slot.} =
-  if not search.host.isNil:
-    search.bar.layoutInBounds(search.host[].bounds())
-
-proc searchMetricsChanged(
-    search: TextSearchController, reason: LayoutInvalidationReason
-) {.slot.} =
-  if reason in
-      {lirIntrinsic, lirDescendantIntrinsic, lirAppearanceMetrics, lirContainerMetrics}:
-    search.layoutSearch()
-
 proc showSearch*(
     search: TextSearchController, replacing = false
 ): bool {.discardable.} =
@@ -126,8 +116,7 @@ proc showSearch*(
     return
   search.bar.hidden = false
   search.bar.replacementVisible = replacing
-  search.layoutSearch()
-  search.bar.layoutSubtreeIfNeeded()
+  search.host[].layoutSubtreeIfNeeded()
   search.refreshSearch()
   search.bar.queryField().selectedRange = initTextRange(0, search.bar.query().runeLen)
   Window(owner).makeFirstResponder(search.bar.queryField())
@@ -225,8 +214,27 @@ proc newTextSearchController*(
       ,
     )
   host.addSubview(result.bar)
-  host.connect(geometryDidChange, result, layoutSearch)
-  result.bar.connect(layoutInputChanged, result, searchMetricsChanged)
+  let
+    bar = result.bar
+    insetPriority = initLayoutPriority(999)
+  result.floatingConstraints =
+    @[
+      bar[atLeft].greaterThanOrEqualTo(host[atLeft]),
+      bar[atTop].greaterThanOrEqualTo(host[atTop]),
+      bar[atRight].lessThanOrEqualTo(host[atRight]),
+      bar[atBottom].lessThanOrEqualTo(host[atBottom]),
+      bar[atWidth].lessThanOrEqualTo(SearchBarWidth),
+      bar[atTop].equalTo(
+        host[atTop], constant = SearchBarInset, priority = insetPriority
+      ),
+      bar[atRight].equalTo(
+        host[atRight], constant = -SearchBarInset, priority = insetPriority
+      ),
+      bar[atWidth].lessThanOrEqualTo(
+        host[atWidth], constant = -2 * SearchBarInset, priority = insetPriority
+      ),
+    ]
+  activate(result.floatingConstraints)
 
 func searchMatchCount*(search: TextSearchController): int =
   search.matches.len
@@ -240,9 +248,8 @@ proc close*(search: TextSearchController) =
     return
   if not search.adapter.clear.isNil:
     search.adapter.clear()
-  if not search.host.isNil:
-    search.host[].disconnect(geometryDidChange, search, layoutSearch)
-  search.bar.disconnect(layoutInputChanged, search, searchMetricsChanged)
+  deactivate(search.floatingConstraints)
+  search.floatingConstraints.setLen(0)
   search.bar.close()
   search.adapter = TextSearchAdapter()
   search.host = default(WeakRef[View])

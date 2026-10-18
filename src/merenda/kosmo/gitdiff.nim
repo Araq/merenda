@@ -2927,7 +2927,6 @@ protocol GitDiffLayout of nimkit.ViewLayoutProtocol:
       nimkit.rect(0, 44, bounds.size.width, max(bounds.size.height - 44, 0))
     )
     panel.syncDisclosureButtons()
-    panel.search.bar.layoutInBounds(bounds)
 
 proc `markdownStyle=`*(panel: KosmoGitDiffPanel, style: nimkit.MarkdownStyle) =
   ## Apply the shared Markdown palette while keeping file controls compact.
