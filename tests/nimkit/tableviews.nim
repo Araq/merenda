@@ -3740,6 +3740,49 @@ suite "NimKit TableView":
     check not scrollView.verticalScrollerRect().isEmpty
     check scrollView.horizontalScrollerRect().isEmpty
 
+  test "hosted table controls keep their cell frames after a sibling label changes":
+    let
+      root = newView(frame = rect(0, 0, 600, 180))
+      tableView = newTableView(frame = rect(0, 0, 360, 140))
+      detail = newLabel("No row selected")
+      source = newTableDataSourceSpy(3)
+      delegate = newTableDelegateSpy()
+
+    delegate.hostedColumns = @["state", "action"]
+    delegate.textFieldColumns = @["state"]
+    delegate.buttonColumns = @["action"]
+    tableView.addColumn(newTableColumn("project", "Project", width = 160.0))
+    tableView.addColumn(newTableColumn("state", "State", width = 100.0))
+    tableView.addColumn(newTableColumn("action", "Action", width = 90.0))
+    tableView.dataSource = source
+    tableView.delegate = delegate
+    tableView.rowHeight = 28.0
+    root.addSubview(tableView)
+    root.addSubview(detail)
+    activateConstraints:
+      detail[atLeft] == tableView[atRight] + 10.0
+      detail[atTop] == root[atTop]
+
+    discard buildRenders(root)
+    discard buildRenders(root)
+
+    detail.text = "Inspecting: Renderer Pipeline (Mara)"
+    root.layoutSubtreeIfNeeded()
+
+    for (_, rowView, _) in tableView.visibleRowViews():
+      let cells = rowView.subviews()
+      require cells.len == 2
+      check cells[0].frame().rectsClose(rect(160, 0, 100, 28))
+      check cells[1].frame().rectsClose(rect(260, 0, 90, 28))
+    check not root.hasPendingLayout()
+
+    discard buildRenders(root)
+    for (_, rowView, _) in tableView.visibleRowViews():
+      let cells = rowView.subviews()
+      check cells[0].frame().rectsClose(rect(160, 0, 100, 28))
+      check cells[1].frame().rectsClose(rect(260, 0, 90, 28))
+    check not root.hasPendingLayout()
+
   test "one table resize converges without pending layout":
     let
       root = newView(frame = rect(0, 0, 500, 400))

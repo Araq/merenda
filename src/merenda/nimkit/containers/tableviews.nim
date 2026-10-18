@@ -57,7 +57,7 @@ type
     rect*: Rect
 
   TableEditingState* = object
-    row*: int
+    row*: int = -1
     column*: TableColumn
     active*: bool
     validationError*: string
@@ -70,17 +70,17 @@ type
   TableHeaderTracking = object
     part: TableHeaderHitPart
     column: TableColumn
-    columnIndex: int
-    row: int
+    columnIndex: int = -1
+    row: int = -1
     startPoint: Point
     startSize: Size
     draggingColumn: bool
-    insertionIndex: int
+    insertionIndex: int = -1
     insertionRect: Rect
 
   TableDraggingState = object
     session: DraggingSession
-    dropTarget: DraggingDropTarget
+    dropTarget: DraggingDropTarget = initDraggingDropTarget()
     rowStart: TableRowDragStart
 
   TableEditingSurface = object
@@ -89,7 +89,7 @@ type
     isRowView: bool
 
   TableEditCompletion = object
-    row: int
+    row: int = -1
     column: TableColumn
     committed: bool
 
@@ -102,8 +102,11 @@ type
   TableView* = ref object of Control
     xColumns: seq[TableColumn]
     xRowSelection: TableRowSelection
-    xOptions: set[TableViewOption]
-    xHighlightedIndex: int
+    xOptions: set[TableViewOption] = {
+      tvoPointerRowHighlights, tvoPointerColumnHighlights, tvoFocusedRowHighlight,
+      tvoFocusedColumnHighlight,
+    }
+    xHighlightedIndex: int = -1
     xScrollView: ScrollView
     xContentView: TableContentView
     xRowSizing: TableRowSizing
@@ -111,10 +114,10 @@ type
     xWidthMeasurement: TableWidthMeasurement
     xRowHeightMeasurement: TableRowHeightMeasurement
     xTrackingItem: bool
-    xPressedIndex: int
+    xPressedIndex: int = -1
     xTypeSelection: TableTypeSelection
-    xTableRole: StyleRole
-    xItemRole: StyleRole
+    xTableRole: StyleRole = srTableView
+    xItemRole: StyleRole = srRowItem
     xRowCount: int
     xTableDataSource: DynamicAgent
     xTableDelegate: DynamicAgent
@@ -123,7 +126,7 @@ type
     xHeaderSettings: TableHeaderSettings
     xHoveredColumn: TableColumn
     xPressedColumn: TableColumn
-    xClickedRow: int
+    xClickedRow: int = -1
     xClickedColumn: TableColumn
     xFocusedColumn: TableColumn
     xHighlightedColumn: TableColumn
@@ -851,7 +854,7 @@ func isActive(tracking: TableHeaderTracking): bool {.inline.} =
   tracking.part != thpNone
 
 proc clear(tracking: var TableHeaderTracking) =
-  tracking = TableHeaderTracking(columnIndex: -1, row: -1, insertionIndex: -1)
+  tracking = TableHeaderTracking()
 
 proc invalidateTableWidthMeasurement(tableView: TableView) =
   tableView.xWidthMeasurement.valid = false
@@ -1121,7 +1124,6 @@ proc initTableColumnFields*(
   column.xAlignment = alignment
   column.xResizePolicy = resizePolicy
   column.xSizingPolicy = sizingPolicy
-  column.xSortDirection = tsdNone
   column.xReuseIdentifier = identifier
 
 proc newTableColumn*(
@@ -2948,7 +2950,7 @@ proc reloadData*(tableView: TableView, updateRows: proc() {.closure.} = nil) =
     if editingRow >= 0:
       tableView.xCellEditing.state.row = editingRow
     else:
-      tableView.xCellEditing.state = TableEditingState(row: -1)
+      tableView.xCellEditing.state = TableEditingState()
       Control(tableView).clearValidationError()
       tableView.clearEditingSurface()
   tableView.layoutTableContentIfNeeded()
@@ -3002,7 +3004,7 @@ proc flushTableRowUpdates(tableView: TableView, updates: openArray[TableRowUpdat
       not tableView.validCell(
         tableView.xCellEditing.state.row, tableView.xCellEditing.state.column
       ):
-    tableView.xCellEditing.state = TableEditingState(row: -1)
+    tableView.xCellEditing.state = TableEditingState()
     Control(tableView).clearValidationError()
     tableView.clearEditingSurface()
   tableView.invalidateTableWidthMeasurement()
@@ -3715,16 +3717,18 @@ proc recycleVisibleCellViews*(tableView: TableView) =
 proc hasHostedCell(tableView: TableView, row: int, column: TableColumn): bool =
   tableView.xCellSlots.findCellSlot(row, column) >= 0
 
+proc layoutHostedCell(rowView: TableRowView, column: TableColumn, cellView: View) =
+  let rowBounds =
+    rect(0.0, 0.0, rowView.bounds().size.width, rowView.bounds().size.height)
+  cellView.setFrameFromLayout(rowView.xTableView.columnRect(rowBounds, column))
+
 proc syncVisibleTableCells(tableView: TableView) =
   let previousSlots = tableView.xCellSlots
   var
     nextSlots: seq[TableCellSlot]
     used = newSeq[bool](previousSlots.len)
   for rowView in tableView.xContentView.xRowViews:
-    let
-      row = rowView.xRow.index
-      rowRect = rowView.frame()
-    let rowBounds = rect(0.0, 0.0, rowRect.size.width, rowRect.size.height)
+    let row = rowView.xRow.index
     for column in tableView.columns:
       if not column.hidden():
         var cellView: View
@@ -3737,7 +3741,7 @@ proc syncVisibleTableCells(tableView: TableView) =
         if not cellView.isNil:
           if cellView.superview() != rowView:
             rowView.addSubview(cellView)
-          cellView.setFrameFromLayout(tableView.columnRect(rowBounds, column))
+          rowView.layoutHostedCell(column, cellView)
           cellView.hidden = false
           cellView.setWidgetState(ssDisabled, not tableView.rowEnabled(row))
           tableView.applyCellAccessibility(row, column, cellView)
@@ -3972,7 +3976,7 @@ proc finishCommitEditingCell(tableView: TableView, value: string): bool =
     return false
   tableView.xCellEditing.completion =
     TableEditCompletion(row: editing.row, column: editing.column, committed: true)
-  tableView.xCellEditing.state = TableEditingState(row: -1)
+  tableView.xCellEditing.state = TableEditingState()
   tableView.clearEditingSurface()
   let delegate = tableView.delegate()
   if not delegate.isNil:
@@ -4006,7 +4010,7 @@ proc finishCancelEditingCell(tableView: TableView): bool =
   let editing = tableView.xCellEditing.state
   tableView.xCellEditing.completion =
     TableEditCompletion(row: editing.row, column: editing.column)
-  tableView.xCellEditing.state = TableEditingState(row: -1)
+  tableView.xCellEditing.state = TableEditingState()
   Control(tableView).clearValidationError()
   tableView.clearEditingSurface()
   let delegate = tableView.delegate()
@@ -4025,7 +4029,7 @@ proc editableColumns(tableView: TableView): seq[TableColumn] =
 proc editableCellInRowAfter(
     tableView: TableView, row: int, column: TableColumn, direction: int
 ): TableEditingState =
-  result = TableEditingState(row: -1)
+  result = TableEditingState()
   if row notin 0 ..< tableView.rowCount():
     return
   let columns = tableView.editableColumns()
@@ -4050,7 +4054,7 @@ proc editableCellInRowAfter(
 proc moveEditingFromEndedCell(tableView: TableView, movement: TextEditMovement): bool =
   if not tableView.xCellEditing.completion.committed:
     return false
-  var next = TableEditingState(row: -1)
+  var next = TableEditingState()
   case movement
   of temTab:
     next = tableView.editableCellInRowAfter(
@@ -4838,6 +4842,14 @@ protocol DefaultTableRowViewDrawing of ViewDrawingProtocol:
     if not tableView.drawCustomTableRow(context, rect, rowView.xRow):
       tableView.drawTableRow(context, rect, rowView.xRow)
 
+protocol DefaultTableRowViewLayout of ViewLayoutProtocol:
+  method layoutSubviews(rowView: TableRowView) =
+    # A sibling's intrinsic-size change can solve cached control geometry without
+    # laying out the table. Restore this row's hosted frames in the same pass.
+    for slot in rowView.xTableView.xCellSlots:
+      if slot.row == rowView.xRow.index:
+        rowView.layoutHostedCell(slot.column, slot.view)
+
 protocol DefaultTableRowViewHitTesting of ViewProtocol:
   method pointInside(rowView: TableRowView, point: Point): bool =
     false
@@ -4905,7 +4917,7 @@ func hasExceededDragThreshold(startPoint, location: Point, threshold: float32): 
   max(abs(location.x - startPoint.x), abs(location.y - startPoint.y)) >= threshold
 
 proc clearRowDragState(tableView: TableView) =
-  tableView.xDragging.rowStart = TableRowDragStart(row: -1)
+  tableView.xDragging.rowStart = TableRowDragStart()
 
 proc rowReorderDragRows(tableView: TableView): seq[int] =
   if tableView.xDragging.rowStart.row < 0:
@@ -5118,6 +5130,7 @@ proc initTableRowView(tableView: TableView): TableRowView =
   initTableBaseChild(result, false)
   result.xTableView = tableView
   discard result.withProtocol(DefaultTableRowViewDrawing)
+  discard result.withProtocol(DefaultTableRowViewLayout)
   discard result.withProtocol(DefaultTableRowViewHitTesting)
   discard result.withProtocol(DefaultTableRowViewAccessibility)
 
@@ -6392,36 +6405,9 @@ proc tableViewportGeometryChanged(tableView: TableView) {.slot.} =
 
 proc initTableViewFields*(tableView: TableView, frame: Rect = AutoRect) =
   initControlFields(tableView, frame)
-  tableView.xTableRole = srTableView
   let style = tableView.tableStyle()
-  tableView.xRowSelection = initTableRowSelection()
-  tableView.xHighlightedIndex = -1
-  tableView.xPressedIndex = -1
   tableView.xRowSizing.height = style.rowHeight
-  tableView.xRowSizing.visibleRows = 5
-  tableView.xWidthSizing.columnSizing = tvcsNatural
-  tableView.xWidthSizing.mode = tvwsmColumns
-  tableView.xItemRole = srRowItem
-  tableView.xRowCount = 0
-  tableView.xHeaderSettings.visible = true
   tableView.xHeaderSettings.height = style.headerHeight
-  tableView.xClickedRow = -1
-  tableView.xRowHeaderSettings.visible = false
-  tableView.xRowHeaderSettings.width = 48.0'f32
-  tableView.xOptions = {
-    tvoPointerRowHighlights, tvoPointerColumnHighlights, tvoFocusedRowHighlight,
-    tvoFocusedColumnHighlight,
-  }
-  tableView.xCellEditing.state = TableEditingState(row: -1)
-  tableView.xCellEditing.completion.row = -1
-  tableView.xDragging.dropTarget = initDraggingDropTarget()
-  tableView.clearRowDragState()
-  tableView.xStateScope = tvssAutomatic
-  tableView.xRowSizing.overrides = initTable[int, float32]()
-  tableView.xColumnAutosaveAliases = initTable[string, string]()
-  tableView.xRowIdentifierAliases = initTable[string, string]()
-  tableView.xHeaderTracking.clear()
-  tableView.xReusableCellViews = initTable[string, seq[View]]()
   tableView.xScrollView = initTableScrollView(tableView)
   tableView.xContentView = initTableContentView(tableView)
   tableView.xScrollView.documentView = tableView.xContentView

@@ -5,6 +5,42 @@
 - Run Kosmo's GitHub CLI through the user's login shell on macOS and Linux, so
   apps opened from the desktop can find `gh` installed through shell profiles.
   Preserve the project directory and noninteractive GitHub settings after startup.
+- Split Git diff comparison controls into branch and history dropdowns, with
+  an ellipsis between the two sides. Keep branch menus free of ancestor entries,
+  preserve history depth when switching branches, and wrap the toolbar in narrow
+  panes so history values stay visible.
+
+- Add Cmd-J (Ctrl-J with the platform shortcut profile on Windows/Linux) to
+  focus an existing terminal, including hidden tabs and detached windows, or
+  open a terminal in the nearest pane to the right. Create a right split when
+  no pane is available. Keep New Terminal available for additional terminals.
+
+- Draw the Git diff refresh control with a vector icon so it remains visible
+  with every UI font, and fit Auto-refresh's label and switch to their content
+  with a smaller gap.
+
+- Keep the status-bar keymode tied to the global editor key-routing policy,
+  mapping Vim and Hybrid to Moe and Native to normal. Opening read-only viewers
+  and toggling forced text entry preserve the selected keymode.
+
+- Reserve popup menu columns for checkmarks, shortcuts, and submenu indicators
+  so they do not overlap titles. Measure menu contents instead of forcing small
+  menus to be 180 pixels wide.
+
+- Show project-relative paths in Find in Files tooltips, including match locations
+  and Load more rows. Use the closest project root in workspaces with multiple roots.
+
+- Use compact +, -, and refresh controls on the right of Kosmo's Git diff toolbar,
+  with Auto-refresh beside Refresh at the far right and descriptive tooltips and
+  accessibility labels. Leave enough text space for the action symbols to render.
+
+- Keep hosted table controls at their cell size when sibling labels update,
+  preventing Inspect buttons and state fields from shrinking until another interaction.
+
+- Add a keymode popup at the bottom right of Kosmo's status bar to switch between
+  Moe/Vim modal editing and normal text entry with native editing shortcuts.
+  Use a compact menu that opens upward, and keep its checked selection synchronized
+  with Settings and detached editor windows.
 
 - Add a Windows VirtualBox test setup, matching Guest Additions, an OpenGL 3.3
   console probe, and guards against concurrent bhyve operation. Document the

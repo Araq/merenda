@@ -113,18 +113,7 @@ proc expandableDirectory(path: string): bool =
 proc projectRelativePath*(tree: KosmoFileTree, path: string): string =
   ## Return a path relative to the closest containing project root.
   ## Paths outside the workspace retain their normalized absolute path.
-  let fullPath = normalizedPath(absolutePath(path))
-  var containingRoot: string
-  for root in tree.xRootPaths:
-    if (fullPath == root or fullPath.isRelativeTo(root)) and
-        root.len > containingRoot.len:
-      containingRoot = root
-  if containingRoot.len == 0:
-    fullPath
-  elif fullPath == containingRoot:
-    "."
-  else:
-    relativePath(fullPath, containingRoot)
+  path.projectRelativePath(tree.xRootPaths)
 
 proc loadChildPaths(tree: KosmoFileTree, parentIdentifier: string) =
   if tree.xChildren.hasKey(parentIdentifier):

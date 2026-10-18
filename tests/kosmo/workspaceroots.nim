@@ -105,6 +105,14 @@ suite "Kosmo workspace roots":
     require frontend.searchPanel.performSearch()
     require frontend.searchPanel.waitForSearch(timeoutMilliseconds = 60_000)
     check frontend.searchPanel.resultsView.matches.len == 3
+    let results = frontend.searchPanel.resultsView
+    for index, match in results.matches:
+      let
+        identifier = results.matchIdentifier(index)
+        parentIdentifier = results.parentIdentifierForItem(identifier)
+      check results.tooltipForItem(parentIdentifier) == "shared.txt"
+      check results.tooltipForItem(identifier) ==
+        "shared.txt:" & $match.line & ":" & $match.column
     for root in roots:
       require frontend.showFileExplorer()
       frontend.contentView.layoutSubtreeIfNeeded()

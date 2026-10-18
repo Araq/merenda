@@ -588,6 +588,18 @@ File → New Terminal to open a shell. Markdown files open as previews, with a
 control to switch to the source editor. Merenda Settings places the theme and
 UI scale in Appearance, fonts in Typography, and scrolling in Behavior.
 
+Choose **moe (vim)** or **normal** from the keymode popup at the bottom right of
+the status bar. **normal** keeps text entry active and uses native editing
+shortcuts; **moe (vim)** enables modal editing. The choice applies to every
+editor pane, including detached windows.
+The popup follows the global editor key-routing policy. Read-only viewers keep
+the selected mode, and the separate **Force input mode** setting controls text entry.
+
+Press **Cmd-J** (**Ctrl-J** on Windows/Linux with the platform shortcut profile)
+to focus an existing terminal. If none is open, Kosmo opens one in the nearest
+pane to the right, creating a right split when needed. **New Terminal** in the
+File menu still opens an additional terminal in the active pane.
+
 In Moe's normal mode, `:e path` opens a Kosmo document tab or selects the file's
 existing tab.
 `:help` and `:config` open reusable tabs; `:config` keeps Moe's interactive
@@ -614,6 +626,11 @@ TextMate grammars installed from Kosmo Settings also highlight Markdown code
 fences and Git diffs. Fences use the grammar's language ID (for example, `sql`),
 and diffs use its filename and extension associations. Installing a grammar
 refreshes open viewers and cached previews without restarting Kosmo.
+
+The Git diff toolbar compares **branch · history … branch · history**. Each
+history dropdown offers **-** for the current revision and **^**, **^2**, **^3**
+for one, two, or three commits back along first-parent history. Changing a branch
+keeps its selected history depth; **Working Tree** disables history on that side.
 
 Kosmo advances Moe's background work from the native event loop, including
 when Git monitoring is disabled. Hook output, build output, and `:jobs` use a

@@ -34,11 +34,11 @@ type
     tvoFocusedColumnHighlight
 
   TableRowSelection* = object
-    mode*: TableSelectionMode
-    index*: int ## Cached first selected row, or -1 when empty.
+    mode*: TableSelectionMode = lsmSingle
+    index*: int = -1 ## Cached first selected row, or -1 when empty.
     indexes*: seq[int]
-    anchor*: int ## Fixed end of a Shift selection range, or -1 when empty.
-    lead*: int ## Moving end of a Shift selection range, or -1 when empty.
+    anchor*: int = -1 ## Fixed end of a Shift selection range, or -1 when empty.
+    lead*: int = -1 ## Moving end of a Shift selection range, or -1 when empty.
 
   TableColumnResizePolicy* = enum
     tcrFixed
@@ -166,17 +166,17 @@ type
   TableRowSizing* = object
     height*: float32
     hasExplicitHeight*: bool
-    visibleRows*: int
+    visibleRows*: int = 5
     overrides*: Table[int, float32]
 
   TableHeaderSettings* = object
-    visible*: bool
+    visible*: bool = true
     height*: float32
     hasExplicitHeight*: bool
 
   TableRowHeaderSettings* = object
     visible*: bool
-    width*: float32
+    width*: float32 = 48.0'f32
     title*: string
 
   TableTypeSelection* = object
@@ -214,7 +214,7 @@ type
     computing*: bool
 
   TableRowDragStart* = object
-    row*: int
+    row*: int = -1
     point*: Point
 
   TableRowUpdateBatch* = object
@@ -238,7 +238,7 @@ proc `[]=`*(
 
 func initTableRowSelection*(mode = tsmSingle): TableRowSelection =
   ## Initializes an empty selection with no anchor or lead row.
-  TableRowSelection(mode: mode, index: -1, anchor: -1, lead: -1)
+  TableRowSelection(mode: mode)
 
 proc clear*(selection: var TableRowSelection) =
   ## Clears the selected rows and cursor while preserving the selection mode.
