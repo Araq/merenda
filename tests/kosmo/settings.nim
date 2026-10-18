@@ -63,7 +63,7 @@ suite "Kosmo settings":
     check choice.menu().len == 2
     check choice.menu()[0].title == "moe (vim)"
     check choice.menu()[1].title == "normal"
-    check choice.title == "custom"
+    check choice.title == "moe (vim)"
     frontend.setEditorInputPolicy(KosmoEditorInputPolicy.Vim)
     check choice.title == "moe (vim)"
     check choice.menu()[0].state == bsOn
@@ -116,14 +116,14 @@ suite "Kosmo settings":
     check editor.bufferText(bufferId).get() == "hello"
 
     frontend.setForceInputMode(true)
-    check choice.title == "custom"
-    check choice.menu()[0].state == bsOff
+    check choice.title == "moe (vim)"
+    check choice.menu()[0].state == bsOn
     check choice.menu()[1].state == bsOff
     frontend.setEditorInputPolicy(KosmoEditorInputPolicy.Native)
     check choice.title == "normal"
     check choice.menu()[1].state == bsOn
     frontend.setEditorInputPolicy(KosmoEditorInputPolicy.Vim)
-    check choice.title == "custom"
+    check choice.title == "moe (vim)"
     frontend.setForceInputMode(false)
     check choice.title == "moe (vim)"
     check choice.menu()[0].state == bsOn
@@ -142,13 +142,43 @@ suite "Kosmo settings":
     check choice.title == "normal"
     writeFile(path, """{"editorInput": "vim"}""")
     check frontend.loadKosmoKeyBindings(path).errors.len == 0
-    check choice.title == "custom"
-    check choice.menu()[0].state == bsOff
+    check choice.title == "moe (vim)"
+    check choice.menu()[0].state == bsOn
     check choice.menu()[1].state == bsOff
     writeFile(path, """{"editorInput": "native"}""")
     check frontend.loadKosmoKeyBindings(path).errors.len == 0
     check choice.title == "normal"
     check choice.menu()[1].state == bsOn
+
+  test "reader tabs preserve the global editor keymode":
+    let choice = PopupMenuButton(
+      frontend.contentView.viewWithIdentifier(KosmoKeyModeSelectorIdentifier)
+    )
+    frontend.window.setContentView(frontend.contentView)
+    for policy in KosmoEditorInputPolicy:
+      frontend.setEditorInputPolicy(policy)
+      let expectedIndex = if policy == KosmoEditorInputPolicy.Native: 1 else: 0
+      for forced in [false, true]:
+        frontend.setForceInputMode(forced)
+        require frontend.showGitDiff()
+        frontend.contentView.layoutSubtreeIfNeeded()
+        frontend.editorView.refresh()
+        check choice.title == choice.menu()[expectedIndex].title()
+        check choice.menu()[expectedIndex].state == bsOn
+        check frontend.editorInputPolicy() == policy
+        check frontend.forceInputMode() == forced
+        require frontend.openDocument(
+          newKosmoPaneDocument("mode-reader", "Reader", newMarkdownView())
+        )
+        check choice.title == choice.menu()[expectedIndex].title()
+        check choice.menu()[expectedIndex].state == bsOn
+        check frontend.editorInputPolicy() == policy
+        check frontend.forceInputMode() == forced
+        require frontend.newEditorTab()
+        check choice.title == choice.menu()[expectedIndex].title()
+        check choice.menu()[expectedIndex].state == bsOn
+        check frontend.editorInputPolicy() == policy
+        check frontend.forceInputMode() == forced
 
   test "shortcut settings update input behavior and show readable bindings":
     require settingsTabs.selectPage(KosmoShortcutsSettingsTabIdentifier)

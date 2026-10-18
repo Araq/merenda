@@ -327,8 +327,8 @@ suite "Kosmo Moe host commands":
       KeyEvent(key: keyEnter, keyCode: keyEnter.ord)
     )
     check editor.forceInputMode() != originalForceMode
-    check choice.title == "custom"
-    check choice.menu()[0].state == bsOff
+    check choice.title == "moe (vim)"
+    check choice.menu()[0].state == bsOn
     check choice.menu()[1].state == bsOff
     require frontend.documentTabs.selectDocumentTabWithIdentifier(originalTab)
     require frontend.documentTabs.selectDocumentTabWithIdentifier(

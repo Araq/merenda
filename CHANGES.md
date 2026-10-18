@@ -16,9 +16,13 @@
   with every UI font, and fit Auto-refresh's label and switch to their content
   with a smaller gap.
 
-- Match status-bar keymode presets against both editing settings, show custom
-  combinations without a checked preset, and refresh the selector after Moe
-  configuration edits.
+- Keep the status-bar keymode tied to the global editor key-routing policy,
+  mapping Vim and Hybrid to Moe and Native to normal. Opening read-only viewers
+  and toggling forced text entry preserve the selected keymode.
+
+- Reserve popup menu columns for checkmarks, shortcuts, and submenu indicators
+  so they do not overlap titles. Measure menu contents instead of forcing small
+  menus to be 180 pixels wide.
 
 - Show project-relative paths in Find in Files tooltips, including match locations
   and Load more rows. Use the closest project root in workspaces with multiple roots.

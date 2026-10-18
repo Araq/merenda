@@ -2745,26 +2745,22 @@ proc newKosmoStatusBar(label: nimkit.Label, withSidebarButtons: bool): KosmoStat
   discard result.withProtocol(KosmoStatusBarLayout)
 
 proc syncKeyModeChoices(controller: KosmoDockController) =
-  var
-    identifier: string
-    title = "custom"
+  var selectedMode = KosmoKeyModes[0]
   for mode in KosmoKeyModes:
-    if mode.inputPolicy == controller.editorInputPolicy and
-        mode.forceInput == controller.editor.forceInputMode():
-      identifier = mode.identifier
-      title = mode.title
+    if mode.inputPolicy == controller.editorInputPolicy:
+      selectedMode = mode
       break
   for host in controller.hosts:
     let choice = host.contentView.viewWithIdentifier(KosmoKeyModeSelectorIdentifier)
     if choice of nimkit.PopupMenuButton:
       let button = nimkit.PopupMenuButton(choice)
       for item in button.menu().items():
-        let selected = item.identifier() == identifier
+        let selected = item.identifier() == selectedMode.identifier
         let state = if selected: nimkit.bsOn else: nimkit.bsOff
         if item.state() != state:
           item.state = state
-      if button.title() != title:
-        button.title = title
+      if button.title() != selectedMode.title:
+        button.title = selectedMode.title
 
 proc newKeyModeTarget(
     controller: KosmoDockController, mode: KosmoKeyMode

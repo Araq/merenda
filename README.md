@@ -592,8 +592,8 @@ Choose **moe (vim)** or **normal** from the keymode popup at the bottom right of
 the status bar. **normal** keeps text entry active and uses native editing
 shortcuts; **moe (vim)** enables modal editing. The choice applies to every
 editor pane, including detached windows.
-The popup shows **custom** when Settings or Moe's configuration uses a different
-combination of input policy and forced text entry.
+The popup follows the global editor key-routing policy. Read-only viewers keep
+the selected mode, and the separate **Force input mode** setting controls text entry.
 
 Press **Cmd-J** (**Ctrl-J** on Windows/Linux with the platform shortcut profile)
 to focus an existing terminal. If none is open, Kosmo opens one in the nearest
