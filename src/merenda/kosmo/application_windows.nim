@@ -646,11 +646,19 @@ proc showGitDiff*(frontend: KosmoApplication, path = ""): bool {.discardable.} =
     refreshesRepository = true,
   )
 
+proc updateProjectWindowTitle(frontend: KosmoApplication)
+
 proc performFileTreeAction(
     frontend: KosmoApplication, path: string, action: FileTreeItemAction
 ) =
   if action == ftiaGitDiff:
     discard frontend.showGitDiff(path)
+    return
+  if action == ftiaRemoveRoot:
+    if frontend.fileTree.removeRootPath(path):
+      frontend.updateProjectWindowTitle()
+      if not frontend.searchPanel.isNil:
+        frontend.searchPanel.rootPaths = frontend.fileTree.rootPaths
     return
   let
     renaming = action == ftiaRename

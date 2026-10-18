@@ -465,6 +465,11 @@ Use the Files and Find icons at the left of the status bar to switch sidebar
 views. Click the active icon again to collapse the sidebar and give the editor
 the full window width; click either icon to reopen it at its previous width.
 
+Opening a folder adds it as a project root in the Files sidebar. Right-click a
+project root and choose **Remove Project Root** to remove it from the workspace.
+Its files and open tabs stay intact; Quick Open and Find in Files use the remaining
+roots. You can remove every root and add folders again later.
+
 Press `Cmd-F` on macOS or `Ctrl-F` elsewhere to search an editor, Markdown
 preview, Git diff, or GitHub tab. Use Enter / the arrow buttons to move through
 matches, `Cmd/Ctrl-G` and `Shift-Cmd/Ctrl-G` for next and previous, and Escape

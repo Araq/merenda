@@ -797,6 +797,40 @@ suite "Kosmo file browser item actions":
     discard window.rightMouseDownAt(tree.pointToWindow(initPoint(120, 170)))
     check tree.menu().isNil
 
+  test "project root context menus retain the clicked root for removal":
+    let
+      root = createTempDir("kosmo-root-context-", "")
+      nested = root / "nested"
+      window = newWindow("Root Context", frame = rect(0, 0, 400, 240))
+      tree = newKosmoFileTree(root, frame = rect(0, 0, 340, 180))
+    createDir(nested)
+    require tree.addRootPath(nested)
+    defer:
+      window.close()
+      tree.stopGitStatusMonitoring()
+      removeDir(root)
+    window.setContentView(tree)
+    var actions: seq[tuple[path: string, action: FileTreeItemAction]]
+    tree.onItemAction = proc(path: string, action: FileTreeItemAction) =
+      actions.add (path, action)
+    tree.layoutSubtreeIfNeeded()
+    let bounds = tree.rowItemRect(tree.rowForItem(root))
+    require window.rightMouseDownAt(
+      tree.pointToWindow(initPoint(bounds.minX + 120, bounds.minY + 12))
+    )
+    let menu = tree.menu()
+    require not menu.isNil
+    require menu.items().len == 4
+    check not menu.items()[0].enabled
+    check not menu.items()[1].enabled
+    let removeItem = menu.items()[^1]
+    check removeItem.title == "Remove Project Root"
+    check removeItem.enabled
+    discard tree.selectItemWithIdentifier(nested)
+    require removeItem.perform(window)
+    check actions == @[(root, ftiaRemoveRoot)]
+    require window.dispatchKeyDown(KeyEvent(key: keyEscape, keyCode: keyEscape.ord))
+
   test "rename and delete update files and reject overwriting":
     let root = createTempDir("kosmo-mutations-", "")
     defer:

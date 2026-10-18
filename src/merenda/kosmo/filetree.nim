@@ -30,6 +30,7 @@ type
     ftiaRename
     ftiaDelete
     ftiaGitDiff
+    ftiaRemoveRoot
 
   FileTreeItemActionHandler* =
     proc(path: string, action: FileTreeItemAction) {.closure.}
@@ -528,20 +529,24 @@ proc itemContextMenu*(tree: KosmoFileTree, path: string): nimkit.Menu =
   if path.len == 0:
     return
   result = nimkit.newMenu("File Actions")
-  for action in FileTreeItemAction:
+  var actions = @[ftiaRename, ftiaDelete, ftiaGitDiff]
+  if path in tree.xRootPaths:
+    actions.add ftiaRemoveRoot
+  for action in actions:
     let
       title =
         case action
         of ftiaRename: "Rename…"
         of ftiaDelete: "Delete…"
         of ftiaGitDiff: "Git Diff"
+        of ftiaRemoveRoot: "Remove Project Root"
       selector = nimkit.actionSelector("kosmo.fileTree." & $action)
       item = nimkit.newMenuItem(title, selector)
       weakTree = tree.unsafeWeakRef()
     item.validates = false
     item.enabled =
       not tree.onItemAction.isNil and
-      (action == ftiaGitDiff or path notin tree.xRootPaths)
+      (action in {ftiaGitDiff, ftiaRemoveRoot} or path notin tree.xRootPaths)
     proc makeTarget(
         action: FileTreeItemAction, selector: nimkit.ActionSelector
     ): nimkit.ClosureTarget =
@@ -687,6 +692,32 @@ proc reloadRoots(tree: KosmoFileTree, expanded: seq[string]) =
   tree.selectedItemIdentifier = ""
   tree.reloadOutlineData()
 
+proc rebuildGitStates(tree: KosmoFileTree): bool =
+  var
+    fileStates = initTable[string, nimkit.GitFileState]()
+    descendantStates = initTable[string, nimkit.GitFileState]()
+  for root, rootSnapshot in tree.xGitSnapshots:
+    if rootSnapshot.isRepository:
+      for entry in rootSnapshot.entries:
+        fileStates.includeGitState(entry.path, entry.state)
+        if entry.state != nimkit.gfsIgnored:
+          var parentPath = entry.path.parentDir()
+          while parentPath.len > 0:
+            descendantStates.includeGitState(parentPath, entry.state)
+            if parentPath == root:
+              break
+            let nextParent = parentPath.parentDir()
+            if nextParent == parentPath:
+              break
+            parentPath = nextParent
+  if tree.xGitFileStates == fileStates and tree.xGitDescendantStates == descendantStates:
+    return
+  tree.xGitFileStates = fileStates
+  tree.xGitDescendantStates = descendantStates
+  tree.invalidateSearchIndex()
+  tree.rebuildGitChildren()
+  result = true
+
 proc `rootPath=`*(tree: KosmoFileTree, path: string) =
   let next =
     if path.len > 0 and dirExists(path):
@@ -735,6 +766,38 @@ proc addRootPath*(tree: KosmoFileTree, path: string): bool {.discardable.} =
   tree.reloadRoots(expanded)
   result = true
 
+proc removeRootPath*(tree: KosmoFileTree, path: string): bool {.discardable.} =
+  ## Remove a top-level folder from the workspace without changing files on disk.
+  if tree.isNil or path.len == 0:
+    return
+  let root = normalizedPath(absolutePath(path))
+  let index = tree.xRootPaths.find(root)
+  if index < 0:
+    return
+  tree.xRootPaths.delete(index)
+  tree.xRootPath =
+    if tree.xRootPaths.len > 0:
+      tree.xRootPaths[0]
+    else:
+      ""
+  tree.xGitSnapshots.del(root)
+  discard tree.rebuildGitStates()
+  if not tree.xGitStatusService.isNil:
+    tree.xGitStatusService.rootPaths = tree.xRootPaths
+  let previousExpanded =
+    if tree.filterQuery().len > 0:
+      tree.xExpandedBeforeFilter
+    else:
+      tree.expandedItemIdentifiers()
+  var expanded: seq[string]
+  for identifier in previousExpanded:
+    for remainingRoot in tree.xRootPaths:
+      if identifier == remainingRoot or identifier.isRelativeTo(remainingRoot):
+        expanded.add identifier
+        break
+  tree.reloadRoots(expanded)
+  result = true
+
 proc refresh*(tree: KosmoFileTree) =
   ## Discard cached directory listings and reload the visible hierarchy.
   tree.xWorkspaceFiles.refresh()
@@ -756,30 +819,8 @@ proc applyGitStatus*(tree: KosmoFileTree, snapshot: nimkit.GitStatusSnapshot) =
   if tree.isNil or snapshot.rootPath notin tree.xRootPaths:
     return
   tree.xGitSnapshots[snapshot.rootPath] = snapshot
-  var
-    fileStates = initTable[string, nimkit.GitFileState]()
-    descendantStates = initTable[string, nimkit.GitFileState]()
-  for root, rootSnapshot in tree.xGitSnapshots:
-    if rootSnapshot.isRepository:
-      for entry in rootSnapshot.entries:
-        fileStates.includeGitState(entry.path, entry.state)
-        if entry.state != nimkit.gfsIgnored:
-          var parentPath = entry.path.parentDir()
-          while parentPath.len > 0:
-            descendantStates.includeGitState(parentPath, entry.state)
-            if parentPath == root:
-              break
-            let nextParent = parentPath.parentDir()
-            if nextParent == parentPath:
-              break
-            parentPath = nextParent
-  if tree.xGitFileStates == fileStates and tree.xGitDescendantStates == descendantStates:
-    return
-  tree.xGitFileStates = fileStates
-  tree.xGitDescendantStates = descendantStates
-  tree.invalidateSearchIndex()
-  tree.rebuildGitChildren()
-  tree.reloadFilteredTree()
+  if tree.rebuildGitStates():
+    tree.reloadFilteredTree()
 
 proc applyRefreshedGitStatus(
     tree: KosmoFileTree, snapshot: nimkit.GitStatusSnapshot

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add "Remove Project Root" to Kosmo's file-tree context menu. Removing a root
+  updates the browser, Quick Open, file search, and Git monitoring while keeping
+  its files and open tabs.
+
 ## 0.27.5
 
 - Start the GitHub viewer with Issues and Pull Requests expanded and individual
