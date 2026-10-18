@@ -4,6 +4,10 @@
 
 ## 0.27.6
 
+- Keep pasted text in ordinary text fields at the field's font and color, isolate
+  undo history between editing sessions, and use shared text-view mouse selection
+  so dragging over text replaces the selected range correctly.
+
 - Add Copy Full Path and Copy Relative Path to Kosmo's file-tree context menu.
   Relative paths use the closest containing project root, including nested roots.
 
