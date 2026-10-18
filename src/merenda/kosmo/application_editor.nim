@@ -54,6 +54,7 @@ proc close*(frontend: KosmoApplication)
 proc activateGroup(controller: KosmoDockController, view: KosmoEditorView)
 proc focusPanel(controller: KosmoDockController, panelNumber: int): bool
 proc focusGroup(controller: KosmoDockController, group: KosmoEditorGroup): bool
+proc focusFromSidebar(controller: KosmoDockController): bool
 proc preferredPaneResponder(group: KosmoEditorGroup): nimkit.Responder
 proc spatialNeighborGroup(
   controller: KosmoDockController, source: KosmoEditorGroup, direction: KosmoPaneCommand
@@ -2353,6 +2354,62 @@ proc hasSidebarFocus(pane: KosmoSidebarPane): bool =
     return true
   pane.containsResponder(window.fieldEditorClient())
 
+proc handleSidebarPaneKey(pane: KosmoSidebarPane, event: nimkit.KeyEvent): bool =
+  if pane.dockController.isNil or not pane.hasSidebarFocus():
+    return
+  if pane.pendingPanePrefix:
+    pane.pendingPanePrefix = false
+    if event.key == nimkit.keyEscape:
+      return true
+    let command = event.paneCommand()
+    if command in {kpcFocusLeft, kpcFocusRight}:
+      pane.observedWindow[].suppressPaneShortcutText(event)
+      if command == kpcFocusRight:
+        discard pane.dockController[].focusFromSidebar()
+      return true
+  elif event.key == nimkit.keyW and event.modifiers == {nimkit.kmControl}:
+    pane.pendingPanePrefix = true
+    return true
+
+proc sidebarKeyMethod(
+    pane: KosmoSidebarPane, selector: nimkit.KeyEventSelector
+): nimkit.DynamicMethod =
+  let weakPane = pane.unsafeWeakRef()
+  result = proc(self: nimkit.DynamicAgent, invocation: var nimkit.Invocation) =
+    let event = invocation.argsAs(nimkit.KeyEvent)
+    if not weakPane.isNil and weakPane[].handleSidebarPaneKey(event):
+      invocation.setResult(true)
+    else:
+      invocation.setResult(self.performNext(selector, event).get(false))
+
+proc installSidebarKeys(pane: KosmoSidebarPane, target: nimkit.DynamicAgent) =
+  # Handle continuations before a focused field or outline consumes their text.
+  for selector in [nimkit.keyDown(), nimkitSelectors.performKeyEquivalent()]:
+    discard target.pushMethod(selector, pane.sidebarKeyMethod(selector))
+
+# Translate Kosmo's namespaced editing actions to NimKit commands so the
+# focused text field handles them before they reach the underlying editor.
+protocol KosmoFieldEditorCommandDispatch of nimkit.ResponderCommandDispatchProtocol:
+  method dispatchCommand(
+      editor: nimkit.FieldEditor, args: nimkit.TryToPerformArgs
+  ): bool =
+    let selector = args.selector.nativeEditingCommand().get(args.selector)
+    editor.sendLocalIfHandled(selector, nimkit.ActionArgs(sender: args.sender))
+
+proc installSidebarFieldKeys(pane: KosmoSidebarPane, field: nimkit.TextField) =
+  let cell = field.textFieldCell()
+  var editor = cell.fieldEditorForView(field)
+  if editor.isNil:
+    editor = nimkit.newFieldEditor()
+    let fieldEditor = editor
+    let editorMethod: nimkit.DynamicMethod = proc(
+        self: nimkit.DynamicAgent, invocation: var nimkit.Invocation
+    ) =
+      invocation.setResult(fieldEditor)
+    discard cell.replaceMethod(nimkit.fieldEditorForView(), editorMethod)
+  discard editor.withProtocol(KosmoFieldEditorCommandDispatch)
+  pane.installSidebarKeys(editor)
+
 proc updateSidebarFocus(pane: KosmoSidebarPane) =
   if pane.isNil:
     return
@@ -2371,10 +2428,14 @@ protocol KosmoSidebarAppearanceObserver of nimkit.WindowAppearanceEvents:
     pane.applyKosmoSidebarStyle(appearance)
 
 protocol KosmoSidebarFocusObserver of nimkit.WindowFocusEvents:
+  proc didResignKeyWindow(pane: KosmoSidebarPane) {.slot.} =
+    pane.pendingPanePrefix = false
+
   proc didChangeFirstResponder(
       pane: KosmoSidebarPane, previous: nimkit.Responder
   ) {.slot.} =
     discard previous
+    pane.pendingPanePrefix = false
     pane.updateSidebarFocus()
 
 proc stopObservingWindow(pane: KosmoSidebarPane) =
@@ -2427,7 +2488,7 @@ protocol KosmoSidebarPaneLayout of nimkit.ViewLayoutProtocol:
 
 proc newKosmoSidebarPane(
     tabs: nimkit.CompactTabView,
-    fileTree: KosmoFileTree,
+    fileBrowserPanel: KosmoFileBrowserPanel,
     searchPanel: KosmoFileSearchPanel,
 ): KosmoSidebarPane =
   let
@@ -2450,7 +2511,7 @@ proc newKosmoSidebarPane(
     contextPanel: contextPanel,
     splitView: splitView,
     tabs: tabs,
-    fileTree: fileTree,
+    fileTree: fileBrowserPanel.fileTree,
     searchPanel: searchPanel,
     activeIndicator: activeIndicator,
   )
@@ -2458,6 +2519,13 @@ proc newKosmoSidebarPane(
   result.clipsToBounds = true
   result.addSubview(splitView)
   discard result.withProtocol(KosmoSidebarPaneLayout)
+  result.installSidebarKeys(result)
+  result.installSidebarKeys(fileBrowserPanel.fileTree)
+  result.installSidebarKeys(searchPanel.resultsView)
+  for field in [
+    fileBrowserPanel.filterField, searchPanel.queryField, searchPanel.replacementField
+  ]:
+    result.installSidebarFieldKeys(field)
   result.updateSidebarFocus()
 
 protocol KosmoStatusIconDrawing of nimkit.ViewDrawingProtocol:

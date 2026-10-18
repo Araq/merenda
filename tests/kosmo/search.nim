@@ -97,7 +97,6 @@ suite "Kosmo":
 
     check frontend.showFindInFiles()
     check frontend.sidebarTabs.focused
-    check frontend.window.firstResponder == frontend.window.fieldEditor()
     check frontend.window.fieldEditorClient() == frontend.searchPanel.queryField
     check frontend.fileTree.showsFocusedRowHighlight
     check frontend.searchPanel.resultsView.showsFocusedRowHighlight
@@ -161,7 +160,7 @@ suite "Kosmo":
     check frontend.fileTree.isHiddenOrHasHiddenAncestor()
     check not frontend.searchPanel.hidden
     check frontend.searchPanel.queryField.isEditing
-    check frontend.window.firstResponder == frontend.window.fieldEditor()
+    check frontend.window.fieldEditorClient() == frontend.searchPanel.queryField
 
     check frontend.window.dispatchKeyDown(
       KeyEvent(key: keyE, keyCode: keyE.ord, modifiers: sidebarShortcutModifiers)

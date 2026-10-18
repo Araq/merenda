@@ -470,6 +470,11 @@ project root and choose **Remove Project Root** to remove it from the workspace.
 Its files and open tabs stay intact; Quick Open and Find in Files use the remaining
 roots. You can remove every root and add folders again later.
 
+Use `Ctrl-W h` from the leftmost editor or terminal pane to focus the visible Files
+or Find sidebar. `Ctrl-W l` returns to the adjacent pane. Control-key continuations
+and left/right arrows after `Ctrl-W` work too; navigation keeps the selected
+sidebar tab and leaves collapsed sidebars hidden.
+
 Press `Cmd-F` on macOS or `Ctrl-F` elsewhere to search an editor, Markdown
 preview, Git diff, or GitHub tab. Use Enter / the arrow buttons to move through
 matches, `Cmd/Ctrl-G` and `Shift-Cmd/Ctrl-G` for next and previous, and Escape

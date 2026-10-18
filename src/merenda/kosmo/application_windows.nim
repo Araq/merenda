@@ -1047,7 +1047,7 @@ proc newKosmoApplication*(
         ),
       ]
     )
-    sidebarPane = newKosmoSidebarPane(sidebarTabs, fileTree, searchPanel)
+    sidebarPane = newKosmoSidebarPane(sidebarTabs, fileBrowserPanel, searchPanel)
     splitView = nimkit.newSplitView(nimkit.laHorizontal)
     dockView = nimkit.newDockView()
     mainMenu = app.mainMenu()

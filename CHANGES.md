@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Include the visible Files or Find sidebar in Kosmo's Ctrl-W h/l pane focus
+  navigation, including Control and arrow aliases. Keep the selected sidebar tab
+  and search text, and use Ctrl-W l to return to the adjacent editor or terminal.
+
 - Add "Remove Project Root" to Kosmo's file-tree context menu. Removing a root
   updates the browser, Quick Open, file search, and Git monitoring while keeping
   its files and open tabs.

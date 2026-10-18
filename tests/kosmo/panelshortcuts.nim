@@ -1,4 +1,4 @@
-## Synthetic user-input coverage for Kosmo's numbered panel shortcuts.
+## Synthetic user-input coverage for Kosmo's directional and numbered panel shortcuts.
 import std/[options, os, strutils, tempfiles, unittest]
 
 import merenda/nimkit
@@ -166,13 +166,129 @@ suite "Kosmo synthetic panel shortcuts":
         require frontend.window.dispatchKeyDown(controlKeyEvent(keyW))
         require frontend.window.dispatchKeyDown(KeyEvent(key: direction))
         check frontend.window.firstResponderIs(source.editorView)
-      # The full-height/width pane has no aligned neighbor toward the outer edge.
+      # The top edge stops navigation; the left edge reaches the visible sidebar.
       require frontend.window.makeFirstResponder(groups[0].editorView)
       require frontend.window.dispatchKeyDown(controlKeyEvent(keyW))
       require frontend.window.dispatchKeyDown(
         KeyEvent(key: if vertical: keyK else: keyH)
       )
+      if vertical:
+        check frontend.window.firstResponderIs(groups[0].editorView)
+      else:
+        check frontend.window.firstResponderIs(frontend.fileTree)
+        require frontend.window.dispatchKeyDown(controlKeyEvent(keyW))
+        require frontend.window.dispatchKeyDown(KeyEvent(key: keyL))
+        check frontend.window.firstResponderIs(groups[0].editorView)
+
+  test "horizontal pane shortcuts include the selected sidebar and adjacent content":
+    let
+      root = createTempDir("kosmo-sidebar-pane-navigation-", "")
+      app = newApplication("Kosmo Sidebar Pane Navigation")
+      frontend = newKosmoApplication(app, root, monitorsGitStatus = false)
+    defer:
+      frontend.close()
+      removeDir(root)
+    app.presentSyntheticWindow(frontend)
+    frontend.contentView.frame = rect(0, 0, 1000, 700)
+    require frontend.window.sendAction(actionSelector(KosmoSplitVerticalAction))
+    frontend.contentView.layoutSubtreeIfNeeded()
+    let groups = frontend.editorGroups()
+    require groups.len == 2
+
+    for inFiles in [false, true]:
+      if inFiles:
+        require frontend.showFindInFiles(replacing = true)
+        frontend.searchPanel.queryField.text = "needle"
+        frontend.searchPanel.replacementField.text = "replacement"
+      else:
+        require frontend.showFileExplorer()
+      for continuation in [
+        KeyEvent(key: keyH, text: "h"),
+        controlKeyEvent(keyH),
+        KeyEvent(key: keyArrowLeft),
+      ]:
+        require frontend.window.makeFirstResponder(groups[1].editorView)
+        require frontend.window.dispatchKeyDown(controlKeyEvent(keyW))
+        require frontend.window.dispatchKeyDown(continuation)
+        check frontend.window.firstResponderIs(groups[0].editorView)
+        require frontend.window.dispatchKeyDown(controlKeyEvent(keyW))
+        require frontend.window.dispatchKeyDown(continuation)
+        if continuation.text.len > 0:
+          check frontend.window.dispatchTextInput(continuation.text)
+        if inFiles:
+          check frontend.sidebarTabs.selectedIndex == 1
+          check frontend.window.fieldEditorClient() == frontend.searchPanel.queryField
+          check frontend.searchPanel.queryField.text == "needle"
+          check frontend.searchPanel.replacementField.text == "replacement"
+          check frontend.searchPanel.replacementVisible
+        else:
+          check frontend.sidebarTabs.selectedIndex == 0
+          check frontend.window.firstResponderIs(frontend.fileTree)
+        let towardRight =
+          if continuation.key == keyArrowLeft:
+            KeyEvent(key: keyArrowRight)
+          elif continuation.modifiers == {nimkit.kmControl}:
+            controlKeyEvent(keyL)
+          else:
+            KeyEvent(key: keyL, text: "l")
+        require frontend.window.dispatchKeyDown(controlKeyEvent(keyW))
+        require frontend.window.dispatchKeyDown(towardRight)
+        if towardRight.text.len > 0:
+          check frontend.window.dispatchTextInput(towardRight.text)
+        check frontend.window.firstResponderIs(groups[0].editorView)
+        check frontend.editorGroups().len == 2
+
+    require frontend.showFindInFiles(replacing = true)
+    for responder in [
+      Responder(frontend.searchPanel.resultsView),
+      Responder(frontend.searchPanel.replacementField),
+    ]:
+      require frontend.window.makeFirstResponder(responder)
+      require frontend.window.dispatchKeyDown(controlKeyEvent(keyW))
+      require frontend.window.dispatchKeyDown(KeyEvent(key: keyL, text: "l"))
       check frontend.window.firstResponderIs(groups[0].editorView)
+      check frontend.searchPanel.queryField.text == "needle"
+      check frontend.searchPanel.replacementField.text == "replacement"
+
+    require frontend.showFileExplorer()
+    require frontend.fileBrowserPanel.showFilter()
+    frontend.fileBrowserPanel.filterField.text = "filter"
+    require frontend.window.dispatchKeyDown(controlKeyEvent(keyW))
+    require frontend.window.dispatchKeyDown(KeyEvent(key: keyL, text: "l"))
+    check frontend.window.firstResponderIs(groups[0].editorView)
+    check frontend.fileBrowserPanel.filterField.text == "filter"
+
+    let terminal = newKosmoTerminalView()
+    require frontend.openDocument(
+      newKosmoPaneDocument("sidebar-navigation-terminal", "Terminal", terminal)
+    )
+    require frontend.window.dispatchKeyDown(controlKeyEvent(keyW))
+    require frontend.window.dispatchKeyDown(KeyEvent(key: keyH, text: "h"))
+    check frontend.window.firstResponderIs(frontend.fileTree)
+    require frontend.window.dispatchKeyDown(controlKeyEvent(keyW))
+    require frontend.window.dispatchKeyDown(KeyEvent(key: keyL, text: "l"))
+    check frontend.window.firstResponderIs(terminal)
+
+  test "horizontal pane shortcuts skip hidden and browserless sidebars":
+    let root = createTempDir("kosmo-hidden-sidebar-navigation-", "")
+    defer:
+      removeDir(root)
+    for hasBrowser in [true, false]:
+      let
+        app = newApplication("Kosmo Hidden Sidebar Navigation")
+        frontend = newKosmoApplication(
+          app, root, hasFileBrowser = hasBrowser, monitorsGitStatus = false
+        )
+      defer:
+        frontend.close()
+      app.presentSyntheticWindow(frontend)
+      if hasBrowser:
+        frontend.splitView.setPaneCollapsed(0, true)
+      require frontend.window.dispatchKeyDown(controlKeyEvent(keyW))
+      require frontend.window.dispatchKeyDown(KeyEvent(key: keyH))
+      check frontend.window.firstResponderIs(frontend.editorView)
+      if hasBrowser:
+        check frontend.splitView.isPaneCollapsed(0)
 
   test "numbered shortcuts repeatedly return from the sidebar to terminal content":
     let
@@ -215,6 +331,22 @@ suite "Kosmo synthetic panel shortcuts":
       KeyEvent(key: keyH, keyCode: keyH.ord)
     )
 
+    require frontend.showFindInFiles()
+    frontend.searchPanel.queryField.text = "needle"
+    for deactivate in [false, true]:
+      require frontend.window.sendAction(actionSelector(KosmoSelectAllAction))
+      require frontend.window.dispatchKeyDown(controlKeyEvent(keyW))
+      if deactivate:
+        app.activateWindow(otherWindow)
+        app.activateWindow(frontend.window)
+      else:
+        require frontend.window.makeFirstResponder(frontend.editorView)
+        require frontend.showFindInFiles()
+      require frontend.window.dispatchKeyDown(KeyEvent(key: keyL, text: "l"))
+      check frontend.window.fieldEditorClient() == frontend.searchPanel.queryField
+      check frontend.searchPanel.queryField.text == "l"
+      frontend.searchPanel.queryField.text = "needle"
+
   test "sidebar commands from a detached pane activate the browser window":
     let
       app = newApplication("Kosmo Detached Sidebar Focus Test")
@@ -245,6 +377,11 @@ suite "Kosmo synthetic panel shortcuts":
     detached.contentView().layoutSubtreeIfNeeded()
 
     app.activateWindow(detached)
+    let detachedResponder = detached.firstResponder()
+    require detached.dispatchKeyDown(controlKeyEvent(keyW))
+    require detached.dispatchKeyDown(KeyEvent(key: keyH))
+    check detached.firstResponder() == detachedResponder
+    check app.keyWindowIs(detached)
     require detached.sendAction(actionSelector(KosmoShowFileExplorerAction))
     check app.keyWindowIs(frontend.window)
     check frontend.window.firstResponderIs(frontend.fileTree)

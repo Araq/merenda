@@ -95,6 +95,7 @@ type
     activeIndicator: KosmoPaneIndicator
     dockController: WeakRef[KosmoDockController]
     observedWindow: WeakRef[nimkit.Window]
+    pendingPanePrefix: bool
 
   KosmoEditorGroup* = ref object
     identifier*: string
