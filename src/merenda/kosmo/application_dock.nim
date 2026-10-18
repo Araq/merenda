@@ -1128,6 +1128,7 @@ proc detachPaneTab(
   contentView.statusBar.observeWindow(window)
   window.delegate = lifecycle
   controller.hosts.add host
+  contentView.statusBar.configureKeyModeChoice(controller)
   controller.installShortcutBindings(window)
   var
     id: KosmoBufferId
@@ -1436,6 +1437,33 @@ proc newTerminal*(frontend: KosmoApplication): bool {.discardable.} =
     controller = frontend.dockController
     group = controller.activePaneGroup()
   result = controller.openTerminal(group)
+
+proc showTerminal*(frontend: KosmoApplication): bool {.discardable.} =
+  ## Focus an existing terminal, or open one in a pane to the active pane's right.
+  if frontend.isNil or frontend.dockController.isNil:
+    return
+  let controller = frontend.dockController
+  for group in controller.groupsInPanelOrder():
+    for document in group.documents:
+      if document.contentView of nimkit.TerminalView:
+        controller.activatePanelWindow(group.window)
+        controller.activatePaneTab(group, document.identifier)
+        return true
+
+  let source = controller.activePaneGroup()
+  if source.isNil:
+    return
+  var target = controller.spatialNeighborGroup(source, kpcFocusRight)
+  if not target.isNil:
+    return controller.openTerminal(target)
+
+  target = controller.newEditorGroup(source.workspace, source.window, [])
+  if not source.workspace.splitPanel(source.panel, target.panel, nimkit.dpRight):
+    controller.removeGroup(target)
+    return
+  result = controller.openTerminal(target)
+  if not result:
+    controller.removeGroup(target)
 
 protocol KosmoContentLayout of nimkit.ViewLayoutProtocol:
   method layoutSubviews(content: KosmoContentView) =

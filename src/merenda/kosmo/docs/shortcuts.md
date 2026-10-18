@@ -148,6 +148,7 @@ native editing actions. The original command IDs remain valid, including:
 
 ```text
 kosmo.newTerminal
+kosmo.showTerminal
 kosmo.showGitDiff
 kosmo.showGitHub
 kosmo.save
@@ -422,12 +423,18 @@ the physical spelling shown by the active profile:
 | Close window | `primary-Shift-W`; also `Alt-F4` on Windows/Linux |
 | Quit | `primary-Q` |
 | New terminal | `primary-Shift-T` |
+| Show terminal | `primary-J` |
 | Show Git diff | `primary-Shift-D` |
 | Show GitHub issues and PRs | `primary-Shift-H` |
 | Previous / next tab | `primary-Shift-[` / `primary-Shift-]`; also `gt` / `gT` through Moe |
 | Files / Find in Files | `primary-Shift-E` / `primary-Shift-F` |
 | Focus panel | `primary-1` through `primary-8` |
 | Split below / right | `Ctrl-W s` / `Ctrl-W v` in Vim routing, with their control-key aliases; configurable GUI alternatives otherwise |
+
+**Show terminal** focuses an existing terminal tab, including a hidden tab or
+one in a detached window. If none is open, it opens a terminal in the nearest
+pane to the active pane's right, creating a right split when needed.
+**New terminal** always opens an additional terminal in the active pane.
 
 The registry removes the former accidental difference between Save, Quick
 Open, tab navigation, and the File menu. It also makes Open, Settings, Close
