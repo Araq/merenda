@@ -4,6 +4,9 @@
 
 ## 0.27.6
 
+- Keep StackView keyboard traversal aligned with arranged insertion and reordering
+  without detaching focused controls.
+
 - Keep pasted text in ordinary text fields at the field's font and color, isolate
   undo history between editing sessions, and use shared text-view mouse selection
   so dragging over text replaces the selected range correctly.
