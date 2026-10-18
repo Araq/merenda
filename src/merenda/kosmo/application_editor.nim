@@ -51,6 +51,8 @@ proc showSettings*(frontend: KosmoApplication): bool {.discardable.}
 proc openPath*(frontend: KosmoApplication, path: string): bool {.discardable.}
 proc show*(frontend: KosmoApplication)
 proc close*(frontend: KosmoApplication)
+proc setEditorInputPolicy*(frontend: KosmoApplication, policy: KosmoEditorInputPolicy)
+proc setForceInputMode*(frontend: KosmoApplication, enabled: bool)
 proc activateGroup(controller: KosmoDockController, view: KosmoEditorView)
 proc focusPanel(controller: KosmoDockController, panelNumber: int): bool
 proc focusGroup(controller: KosmoDockController, group: KosmoEditorGroup): bool
@@ -2614,10 +2616,32 @@ proc newKosmoStatusIconButton(
   result.acceptsFirstResponder = false
   discard result.withProtocol(KosmoStatusIconDrawing)
 
+const KosmoKeyModes = [
+  KosmoKeyMode(
+    identifier: "moe", title: "moe (vim)", inputPolicy: KosmoEditorInputPolicy.Vim
+  ),
+  KosmoKeyMode(
+    identifier: "normal",
+    title: "normal",
+    inputPolicy: KosmoEditorInputPolicy.Native,
+    forceInput: true,
+  ),
+]
+
 protocol KosmoStatusBarLayout of nimkit.ViewLayoutProtocol:
   method layoutSubviews(bar: KosmoStatusBar) =
     let bounds = bar.bounds()
-    bar.label.setFrameFromLayout(bounds)
+    let
+      choiceWidth = min(100.0'f32, max(bounds.size.width - 8.0'f32, 0.0'f32))
+      choiceHeight = min(20.0'f32, max(bounds.size.height - 8.0'f32, 0.0'f32))
+      choiceX = max(bounds.size.width - choiceWidth - 4.0'f32, 0.0'f32)
+      choiceY = (bounds.size.height - choiceHeight) * 0.5'f32
+    bar.label.setFrameFromLayout(
+      nimkit.rect(0, 0, max(choiceX - 4.0'f32, 0.0'f32), bounds.size.height)
+    )
+    bar.keyModeChoice.setFrameFromLayout(
+      nimkit.rect(choiceX, choiceY, choiceWidth, choiceHeight)
+    )
     if not bar.fileButton.isNil:
       bar.fileButton.setFrameFromLayout(
         nimkit.rect(2, 0, KosmoStatusIconWidth, bounds.size.height)
@@ -2653,6 +2677,15 @@ proc applyKosmoStatusBarStyle(bar: KosmoStatusBar, base: nimkit.Appearance) =
     selector, nimkit.StyleTextInsets, nimkit.insets(0.0'f32, textInset)
   )
   bar.label.appearance = appearance
+  let choiceSelector =
+    nimkit.initStyleSelector(nimkit.srComboBox, id = KosmoKeyModeSelectorIdentifier)
+  appearance.setStyle(
+    choiceSelector, nimkit.StyleFontSize, max(fontSize - 2.0'f32, 10.0'f32)
+  )
+  appearance.setStyle(choiceSelector, nimkit.StyleTextInsets, nimkit.insets(0.0, 4.0))
+  appearance.setStyle(choiceSelector, nimkit.StyleIndicatorSize, 16.0'f32)
+  appearance.setStyle(choiceSelector, nimkit.StyleMinimumSize, nimkit.initSize(0, 20))
+  bar.keyModeChoice.appearance = appearance
 
 protocol KosmoStatusBarAppearanceObserver of nimkit.WindowAppearanceEvents:
   proc didChangeEffectiveAppearance(
@@ -2676,9 +2709,22 @@ proc observeWindow(bar: KosmoStatusBar, window: nimkit.Window) =
 
 proc newKosmoStatusBar(label: nimkit.Label, withSidebarButtons: bool): KosmoStatusBar =
   label.styleId = KosmoStatusLabelStyleId
-  result = KosmoStatusBar(label: label)
+  let
+    menu = nimkit.newMenu("Editor keymode")
+    choice = nimkit.newPopupMenuButton(KosmoKeyModes[0].title, menu)
+  choice.identifier = KosmoKeyModeSelectorIdentifier
+  choice.styleId = KosmoKeyModeSelectorIdentifier
+  choice.accessibilityLabel = "Editor keymode"
+  choice.toolTip = "Editor keymode"
+  choice.acceptsFirstResponder = false
+  for mode in KosmoKeyModes:
+    let item = nimkit.newMenuItem(mode.title)
+    item.identifier = mode.identifier
+    menu.addItem(item)
+  result = KosmoStatusBar(label: label, keyModeChoice: choice)
   result.initViewFields()
   result.addSubview(label)
+  result.addSubview(choice)
   if withSidebarButtons:
     result.fileButton = newKosmoStatusIconButton(
       nimkit.newSvgMtsdfResource(KosmoFilesIconSvg, "kosmo-status-files"), "Files"
@@ -2689,6 +2735,44 @@ proc newKosmoStatusBar(label: nimkit.Label, withSidebarButtons: bool): KosmoStat
     result.addSubview(result.fileButton)
     result.addSubview(result.findButton)
   discard result.withProtocol(KosmoStatusBarLayout)
+
+proc syncKeyModeChoices(controller: KosmoDockController) =
+  let identifier = if controller.editor.forceInputMode(): "normal" else: "moe"
+  for host in controller.hosts:
+    let choice = host.contentView.viewWithIdentifier(KosmoKeyModeSelectorIdentifier)
+    if choice of nimkit.PopupMenuButton:
+      let button = nimkit.PopupMenuButton(choice)
+      for item in button.menu().items():
+        let selected = item.identifier() == identifier
+        let state = if selected: nimkit.bsOn else: nimkit.bsOff
+        if item.state() != state:
+          item.state = state
+        if selected:
+          button.title = item.title()
+
+proc newKeyModeTarget(
+    controller: KosmoDockController, mode: KosmoKeyMode
+): nimkit.DynamicAgent =
+  let weakController = controller.unsafeWeakRef()
+  result = nimkit.newActionTarget(nimkit.actionSelector("kosmo.selectKeyMode")) do(
+    sender: nimkit.DynamicAgent
+  ):
+    discard sender
+    if weakController.isNil:
+      return
+    let controller = weakController[]
+    if controller.frontend.isNil:
+      return
+    let frontend = controller.frontend[]
+    frontend.setEditorInputPolicy(mode.inputPolicy)
+    frontend.setForceInputMode(mode.forceInput)
+
+proc configureKeyModeChoice(bar: KosmoStatusBar, controller: KosmoDockController) =
+  for index, mode in KosmoKeyModes:
+    let item = bar.keyModeChoice.menu()[index]
+    item.action = nimkit.actionSelector("kosmo.selectKeyMode")
+    item.target = controller.newKeyModeTarget(mode)
+  controller.syncKeyModeChoices()
 
 proc syncSidebarButtons(frontend: KosmoApplication) =
   if frontend.isNil or frontend.documentView.isNil:

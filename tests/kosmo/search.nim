@@ -509,6 +509,8 @@ suite "Kosmo":
     check results.matches.len == 65
     check results.rowCount == 32
     check fileItem.title == "many.txt"
+    check results.tooltipForItem(fileIdentifier) == "many.txt"
+    check results.tooltipForItem(firstResultIdentifier) == "many.txt:1:1"
     check fileItem.decoration.badge == "65"
     check results.isItemExpanded(fileIdentifier)
 
@@ -535,6 +537,7 @@ suite "Kosmo":
     check results.rowCount == 32
 
     var loadMoreIdentifier = results.itemIdentifierForRow(results.rowCount - 1)
+    check results.tooltipForItem(loadMoreIdentifier) == "Show more matches from many.txt"
     check results.outlineItemWithIdentifier(loadMoreIdentifier).title.startsWith(
       "Load 30"
     )

@@ -140,7 +140,14 @@ type
     label: nimkit.Label
     fileButton: KosmoStatusIconButton
     findButton: KosmoStatusIconButton
+    keyModeChoice: nimkit.PopupMenuButton
     observedWindow: WeakRef[nimkit.Window]
+
+  KosmoKeyMode = object
+    identifier: string
+    title: string
+    inputPolicy: KosmoEditorInputPolicy
+    forceInput: bool
 
   KosmoContentView = ref object of nimkit.View
     splitView: nimkit.SplitView

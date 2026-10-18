@@ -787,6 +787,22 @@ suite "Kosmo":
     let detachedWindow = frontend.detachedEditorWindows()[0]
     check detachedWindow.contentView() != nil
     check frontend.editorView.editor.tabs().len == 2
+    let
+      primaryChoiceView =
+        frontend.contentView.viewWithIdentifier(KosmoKeyModeSelectorIdentifier)
+      detachedChoiceView =
+        detachedWindow.contentView().viewWithIdentifier(KosmoKeyModeSelectorIdentifier)
+    require primaryChoiceView of PopupMenuButton
+    require detachedChoiceView of PopupMenuButton
+    let
+      primaryChoice = PopupMenuButton(primaryChoiceView)
+      detachedChoice = PopupMenuButton(detachedChoiceView)
+    require primaryChoice.menu()[1].perform(frontend.editorView)
+    check detachedChoice.title == "normal"
+    check frontend.forceInputMode()
+    require detachedChoice.menu()[0].perform(frontend.editorView)
+    check primaryChoice.title == "moe (vim)"
+    check not frontend.forceInputMode()
 
   test "native tab bar sits above the editor grid":
     let frontend = newKosmoApplication(newApplication("Kosmo Tabs Layout Test"))

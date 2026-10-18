@@ -1128,6 +1128,7 @@ proc detachPaneTab(
   contentView.statusBar.observeWindow(window)
   window.delegate = lifecycle
   controller.hosts.add host
+  contentView.statusBar.configureKeyModeChoice(controller)
   controller.installShortcutBindings(window)
   var
     id: KosmoBufferId

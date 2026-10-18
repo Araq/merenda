@@ -588,6 +588,11 @@ File → New Terminal to open a shell. Markdown files open as previews, with a
 control to switch to the source editor. Merenda Settings places the theme and
 UI scale in Appearance, fonts in Typography, and scrolling in Behavior.
 
+Choose **moe (vim)** or **normal** from the keymode popup at the bottom right of
+the status bar. **normal** keeps text entry active and uses native editing
+shortcuts; **moe (vim)** enables modal editing. The choice applies to every
+editor pane, including detached windows.
+
 In Moe's normal mode, `:e path` opens a Kosmo document tab or selects the file's
 existing tab.
 `:help` and `:config` open reusable tabs; `:config` keeps Moe's interactive

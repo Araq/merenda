@@ -1,4 +1,4 @@
-import std/[strutils, unicode, unittest]
+import std/[options, strutils, unicode, unittest]
 
 import figdraw
 import merenda/nimkit
@@ -52,6 +52,72 @@ suite "Kosmo settings":
     check "Moe" in info.credits
     check "GPL-3.0" in info.credits
     check ApplicationAboutLink(text: KosmoMoeUrl, url: KosmoMoeUrl) in info.creditLinks
+
+  test "status bar keymode popup switches editing and follows settings":
+    frontend.window.setContentView(frontend.contentView)
+    let choiceView =
+      frontend.contentView.viewWithIdentifier(KosmoKeyModeSelectorIdentifier)
+    require choiceView of PopupMenuButton
+    let choice = PopupMenuButton(choiceView)
+    check choice.menu().len == 2
+    check choice.menu()[0].title == "moe (vim)"
+    check choice.menu()[1].title == "normal"
+    check choice.title == "moe (vim)"
+    check choice.menu()[0].state == bsOn
+    choice.popupPresentation = ppInline
+
+    for width in [640.0'f32, 1000.0'f32]:
+      frontend.contentView.frame = rect(0, 0, width, 480)
+      frontend.contentView.layoutSubtreeIfNeeded()
+      let choiceFrame = choice.rectToView(choice.bounds(), frontend.contentView)
+      check abs(choiceFrame.maxX - (width - 4)) <= 1
+      check abs(choiceFrame.maxY - 476) <= 1
+      check choiceFrame.size.width <= 100
+      check choiceFrame.size.height <= 20
+      choice.checkVisibleIn(frontend.contentView)
+      check frontend.statusLabel.frame().maxX < choice.frame().minX
+      choice.openPopup()
+      let popup = choice.superview().popupIn()
+      require not popup.isNil
+      check popup.rectToView(popup.bounds(), frontend.contentView).maxY <=
+        choiceFrame.minY
+      choice.closePopup()
+
+    require frontend.newEditorTab()
+    require frontend.window.makeFirstResponder(frontend.editorView)
+    let editor = frontend.editorView.editor
+    var bufferId: KosmoBufferId
+    for tab in editor.tabs():
+      if tab.active:
+        bufferId = tab.id
+    choice.openPopup()
+    require choice.dispatchPopupKeyDown(KeyEvent(key: keyArrowDown))
+    require choice.dispatchPopupKeyDown(KeyEvent(key: keyEnter))
+    check not choice.popupOpen()
+    check frontend.editorInputPolicy() == KosmoEditorInputPolicy.Native
+    check frontend.forceInputMode()
+    check frontend.settingsWindow().editorInputPolicy() == KosmoEditorInputPolicy.Native
+    check frontend.settingsWindow().forceInputMode()
+    require frontend.window.dispatchTextInput("hello")
+    check editor.bufferText(bufferId).get() == "hello"
+    check frontend.window.dispatchKeyDown(
+      KeyEvent(key: keyEscape, keyCode: keyEscape.ord)
+    )
+    check editor.mode() == KosmoEditorMode.Insert
+
+    require choice.menu()[0].perform(frontend.editorView)
+    check frontend.editorInputPolicy() == KosmoEditorInputPolicy.Vim
+    check not frontend.forceInputMode()
+    check editor.handleKey("Esc")
+    check editor.mode() == KosmoEditorMode.Normal
+    check editor.bufferText(bufferId).get() == "hello"
+
+    frontend.setForceInputMode(true)
+    check choice.title == "normal"
+    check choice.menu()[1].state == bsOn
+    frontend.setForceInputMode(false)
+    check choice.title == "moe (vim)"
+    check choice.menu()[0].state == bsOn
 
   test "shortcut settings update input behavior and show readable bindings":
     require settingsTabs.selectPage(KosmoShortcutsSettingsTabIdentifier)

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Show project-relative paths in Find in Files tooltips, including match locations
+  and Load more rows. Use the closest project root in workspaces with multiple roots.
+
+- Use compact +, -, and ⟳ controls on the right of Kosmo's Git diff toolbar,
+  with Auto-refresh beside Refresh at the far right and descriptive tooltips and
+  accessibility labels. Leave enough text space for the action symbols to render.
+
+- Keep hosted table controls at their cell size when sibling labels update,
+  preventing Inspect buttons and state fields from shrinking until another interaction.
+
+- Add a keymode popup at the bottom right of Kosmo's status bar to switch between
+  Moe/Vim modal editing and normal text entry with native editing shortcuts.
+  Use a compact menu that opens upward, and keep its checked selection synchronized
+  with Settings and detached editor windows.
+
 - Add a Windows VirtualBox test setup, matching Guest Additions, an OpenGL 3.3
   console probe, and guards against concurrent bhyve operation. Document the
   failed GPU acceleration test with the FreeBSD 7.2.20 packages.

@@ -1382,11 +1382,26 @@ suite "Kosmo Git diff":
     let panel = newKosmoGitDiffPanel(root)
     defer:
       panel.close()
+    for width in [800.0'f32, 300.0'f32]:
+      panel.frame = rect(0, 0, width, 600)
+      panel.layoutSubtreeIfNeeded()
+      check panel.expandButton.frame().maxX < panel.collapseButton.frame().minX
+      let autoRefresh = panel.autoRefreshSwitch
+      check panel.collapseButton.frame().maxX < autoRefresh.frame().minX
+      check autoRefresh.frame().maxX < panel.refreshButton.frame().minX
+      check abs(panel.refreshButton.frame().maxX - (width - 12)) <= 0.01'f32
+    check panel.refreshButton.title == "⟳"
+    check panel.expandButton.title == "+"
+    check panel.collapseButton.title == "-"
     panel.frame = rect(0, 0, 800, 600)
     panel.layoutSubtreeIfNeeded()
-    panel.frame = rect(0, 0, 300, 600)
-    panel.layoutSubtreeIfNeeded()
-    check panel.collapseButton.frame().maxX <= panel.bounds().maxX
+    for button in [panel.expandButton, panel.collapseButton, panel.refreshButton]:
+      var displayed: string
+      for node in buildRenders(button)[DefaultDrawLevel].nodes:
+        if node.kind == nkText:
+          for index in 0 ..< node.textLayout.glyphCount():
+            displayed.add node.textLayout.displayRune(index)
+      check button.title in displayed
     require panel.waitForDiff()
     check panel.snapshot.errorMessage == ""
     require panel.snapshot.files.len == 1

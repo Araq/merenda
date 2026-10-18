@@ -2884,30 +2884,26 @@ protocol GitDiffLayout of nimkit.ViewLayoutProtocol:
       gap = min(8.0'f32, bounds.size.width * 0.03'f32)
       hasComparison = not panel.fromRevisionButton.hidden
       controlWidth =
-        90.0'f32 + (if hasComparison: 290.0'f32 else: 0.0'f32) + 110.0'f32 + 110.0'f32 +
-        82.0'f32 + 54.0'f32
+        44.0'f32 * 3 + (if hasComparison: 290.0'f32 else: 0.0'f32) + 82.0'f32 + 54.0'f32
       availableWidth = max(
         bounds.size.width - inset * 2.0'f32 -
           gap * (if hasComparison: 5.0'f32 else: 3.0'f32) - 4.0'f32,
         0,
       )
       scale = min(availableWidth / controlWidth, 1.0'f32)
-      refreshWidth = 90.0'f32 * scale
+      refreshWidth = 44.0'f32 * scale
       revisionWidth = 145.0'f32 * scale
-      actionWidth = 110.0'f32 * scale
+      actionWidth = 44.0'f32 * scale
       autoRefreshLabelWidth = 82.0'f32 * scale
       autoRefreshWidth = 54.0'f32 * scale
-      fromRevisionX = inset + refreshWidth + gap
+      fromRevisionX = inset
       toRevisionX = fromRevisionX + revisionWidth + gap
-      expandX =
-        if hasComparison:
-          toRevisionX + revisionWidth + gap
-        else:
-          fromRevisionX
-      collapseX = expandX + actionWidth + gap
-      autoRefreshLabelX = collapseX + actionWidth + gap
-      autoRefreshX = autoRefreshLabelX + autoRefreshLabelWidth + 4.0'f32
-    panel.refreshButton.setFrameFromLayout(nimkit.rect(inset, 8, refreshWidth, 28))
+      refreshX = bounds.size.width - inset - refreshWidth
+      autoRefreshX = refreshX - gap - autoRefreshWidth
+      autoRefreshLabelX = autoRefreshX - 4.0'f32 - autoRefreshLabelWidth
+      collapseX = autoRefreshLabelX - gap - actionWidth
+      expandX = collapseX - gap - actionWidth
+    panel.refreshButton.setFrameFromLayout(nimkit.rect(refreshX, 8, refreshWidth, 28))
     if hasComparison:
       panel.fromRevisionButton.setFrameFromLayout(
         nimkit.rect(fromRevisionX, 8, revisionWidth, 28)
@@ -3061,13 +3057,13 @@ proc newKosmoGitDiffPanel(
   startLocalThreadDefault()
   result = KosmoGitDiffPanel(
     markdownView: nimkit.newMarkdownView(),
-    refreshButton: nimkit.newButton("Refresh"),
+    refreshButton: nimkit.newButton("⟳"),
     fromRevisionButton:
       nimkit.newPopupMenuButton("From: HEAD", nimkit.newMenu("From Revision")),
     toRevisionButton:
       nimkit.newPopupMenuButton("To: Working Tree", nimkit.newMenu("To Revision")),
-    expandButton: nimkit.newButton("Expand All"),
-    collapseButton: nimkit.newButton("Collapse All"),
+    expandButton: nimkit.newButton("+"),
+    collapseButton: nimkit.newButton("-"),
     autoRefreshLabel: nimkit.newLabel("Auto-refresh"),
     autoRefreshSwitch: nimkit.newSwitchButton(),
     snapshot: GitDiffSnapshot(rootPath: rootPath, scopePath: scopePath),
@@ -3118,6 +3114,12 @@ proc newKosmoGitDiffPanel(
   result.markdownView.toolTip = rootPath
   result.fromRevisionButton.hidden = not refreshesRepository
   result.toRevisionButton.hidden = not refreshesRepository
+  result.refreshButton.accessibilityLabel = "Refresh Git diff"
+  result.refreshButton.toolTip = "Refresh Git diff"
+  result.expandButton.accessibilityLabel = "Expand all files"
+  result.expandButton.toolTip = "Expand all files"
+  result.collapseButton.accessibilityLabel = "Collapse all files"
+  result.collapseButton.toolTip = "Collapse all files"
   result.autoRefreshSwitch.accessibilityLabel = "Automatically refresh Git diff"
   result.autoRefreshSwitch.toolTip = "Automatically refresh Git diff when files change"
   result.autoRefreshSwitch.accessibilityIdentifier = "kosmo.gitDiff.autoRefresh"

@@ -318,6 +318,7 @@ proc setEditorInputPolicy*(frontend: KosmoApplication, policy: KosmoEditorInputP
   if frontend.isNil or frontend.dockController.isNil:
     return
   frontend.dockController.editorInputPolicy = policy
+  frontend.dockController.syncKeyModeChoices()
   frontend.updateShortcutSettingsWindow()
 
 func editorInputPolicy*(frontend: KosmoApplication): KosmoEditorInputPolicy =
@@ -333,6 +334,7 @@ proc setForceInputMode*(frontend: KosmoApplication, enabled: bool) =
   frontend.dockController.editor.forceInputMode = enabled
   for group in frontend.dockController.groups:
     group.editorView.refresh()
+  frontend.dockController.syncKeyModeChoices()
   frontend.updateShortcutSettingsWindow()
 
 func forceInputMode*(frontend: KosmoApplication): bool =
@@ -1175,6 +1177,7 @@ proc newKosmoApplication*(
   sidebarPane.dockController = controller.unsafeWeakRef()
   sidebarPane.observeWindow(result.window)
   documentView.statusBar.observeWindow(result.window)
+  documentView.statusBar.configureKeyModeChoice(controller)
   let weakFrontend = result.unsafeWeakRef()
   if hasFileBrowser:
     documentView.statusBar.fileButton.target = nimkit.newActionTarget(
@@ -1363,6 +1366,7 @@ proc newKosmoApplication*(
   )
   fileTree.workspaceFiles.startMonitoring()
   editorView.editor.gitStatusEnabled = monitorsGitStatus
+  controller.syncKeyModeChoices()
   if monitorsGitStatus:
     discard fileTree.startGitStatusMonitoring()
     result.dockController.editor.useEventDrivenGit()
