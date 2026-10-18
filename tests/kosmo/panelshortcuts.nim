@@ -31,6 +31,91 @@ proc primaryShiftKeyEvent(key: Key): KeyEvent =
   )
 
 suite "Kosmo synthetic panel shortcuts":
+  for viewer in ["GitHub", "Git diff", "custom reader"]:
+    test viewer & " background clicks focus its document from a terminal pane":
+      let
+        app = newApplication("Kosmo reader background focus")
+        frontend = newKosmoApplication(app, monitorsGitStatus = false)
+        terminal = newKosmoTerminalView()
+      defer:
+        frontend.close()
+        terminal.close()
+      app.presentSyntheticWindow(frontend)
+      require frontend.window.sendAction(actionSelector(KosmoSplitVerticalAction))
+      require frontend.openDocument(
+        newKosmoPaneDocument("focus.terminal", "Terminal", terminal)
+      )
+      require frontend.window.dispatchKeyDown(commandNumberEvent(2))
+
+      var
+        content, background: View
+        text: TextView
+        github: KosmoGitHubPanel
+        diff: KosmoGitDiffPanel
+      defer:
+        if not github.isNil:
+          github.close()
+        if not diff.isNil:
+          diff.close()
+      case viewer
+      of "GitHub":
+        github = newKosmoGitHubPanel(
+          GitHubSnapshot(
+            items: @[GitHubItem(kind: ghikIssue, number: 1, title: "Issue")]
+          )
+        )
+        content = github
+        text = github.markdownView.textView()
+      of "Git diff":
+        diff = newKosmoGitDiffPanel(
+          parseGitDiff("diff --git a/file.nim b/file.nim\n@@ -1 +1 @@\n-old\n+new\n")
+        )
+        content = diff
+        text = diff.markdownView.textView()
+      else:
+        text = newTextView("Reader selection", frame = rect(8, 8, 180, 28))
+        text.editable = false
+        content = newView()
+        content.addSubview(text)
+        background = content
+      if background.isNil:
+        for child in content.subviews():
+          if child of Label and Label(child).text() == "Auto-refresh":
+            background = child
+            break
+      require not background.isNil
+      require frontend.openDocument(
+        newKosmoPaneDocument(
+          "focus.reader", viewer, content, preferredFirstResponder = text
+        )
+      )
+      if not github.isNil:
+        require github.waitForGitHub()
+      if not diff.isNil:
+        require diff.waitForDiff()
+      frontend.contentView.layoutSubtreeIfNeeded()
+      text.selectedRange = initTextRange(1, 3)
+      require frontend.window.dispatchKeyDown(commandNumberEvent(3))
+      require frontend.window.firstResponderIs(terminal)
+
+      let
+        bounds = background.bounds()
+        point = background.pointToWindow(
+          initPoint(bounds.maxX - 2, bounds.origin.y + bounds.size.height / 2)
+        )
+        target =
+          frontend.contentView.hitTest(frontend.contentView.pointFromWindow(point))
+      require not target.isNil
+      require not target.acceptsFirstResponder()
+      discard frontend.window.mouseDownAt(point)
+      discard frontend.window.mouseUpAt(point)
+      check frontend.window.firstResponderIs(text)
+      check text.selectedRange() == initTextRange(1, 3)
+      require frontend.window.dispatchKeyDown(
+        KeyEvent(key: keyA, keyCode: keyA.ord, modifiers: shortcutModifiers())
+      )
+      check text.selectedText() == text.stringValue()
+
   test "Save makes an unchanged temporary tab permanent":
     let root = createTempDir("kosmo-save-preview-", "")
     defer:

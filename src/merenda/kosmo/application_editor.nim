@@ -2817,6 +2817,16 @@ proc dispatchContentEditingCommand(
   # pasting into a reader must never modify the hidden Moe buffer.
   true
 
+protocol KosmoEditorPaneEvents of nimkit.ResponderEventProtocol:
+  method mouseDown(pane: KosmoEditorPane, event: nimkit.MouseEvent): bool =
+    if event.button != nimkit.mbPrimary or pane.dockGroup.isNil or pane.contentView.isNil or
+        not pane.contentView.frame().contains(event.location):
+      return
+    let handler = pane.editorView.tabsDelegate
+    if handler.isNil or handler.dockController.isNil:
+      return
+    handler.dockController[].focusGroup(pane.dockGroup[])
+
 protocol KosmoEditorPaneCommandDispatch of nimkit.ResponderCommandDispatchProtocol:
   method dispatchCommand(pane: KosmoEditorPane, args: nimkit.TryToPerformArgs): bool =
     if pane.dockGroup.isNil:
@@ -3395,6 +3405,7 @@ proc newKosmoEditorPane(editorView: KosmoEditorView): KosmoEditorPane =
   result.popupList.hidden = true
   result.addSubview(result.popupList)
   discard result.withProtocol(KosmoEditorPaneLayout)
+  discard result.withProtocol(KosmoEditorPaneEvents)
   discard result.withProtocol(KosmoEditorPaneCommandDispatch)
   discard result.withProtocol(KosmoMarkdownLinkDelegate)
   result.markdownView.textView().delegate = nimkit.DynamicAgent(result)

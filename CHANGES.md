@@ -22,6 +22,9 @@
 
 ## 0.27.6
 
+- Focus the displayed document when clicking passive areas in a pane's content,
+  including GitHub and Git diff readers beside a focused terminal.
+
 - Show project-relative file paths in file-tree hover tooltips, preserving Git
   status details and using the same closest project root as Copy Relative Path.
   Connect outline item tooltips to NimKit's shared hover display.

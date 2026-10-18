@@ -486,6 +486,7 @@ Use `Ctrl-W h` from the leftmost editor or terminal pane to focus the visible Fi
 or Find sidebar. `Ctrl-W l` returns to the adjacent pane. Control-key continuations
 and left/right arrows after `Ctrl-W` work too; navigation keeps the selected
 sidebar tab and leaves collapsed sidebars hidden.
+Clicking a passive area in a pane's content focuses its displayed document.
 
 Press `Cmd-F` on macOS or `Ctrl-F` elsewhere to search an editor, Markdown
 preview, Git diff, or GitHub tab. Use Enter / the arrow buttons to move through
