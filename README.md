@@ -762,6 +762,8 @@ Choose **File → Show GitHub Issues and PRs** to read the active project's issu
 and pull requests in a Markdown tab, or press `Cmd/Ctrl-Shift-H`. Install the
 [GitHub CLI](https://cli.github.com/) and sign in with `gh auth login` first;
 the viewer uses the project's GitHub remote and your existing CLI credentials.
+On macOS and Linux, it starts `gh` through your login shell so commands added to
+`PATH` by your login profile are available when Kosmo opens from the desktop.
 It defaults to open items, with controls for issues, pull requests, or both,
 and open, closed, or all states. The Issues and Pull Requests sections start
 expanded, with each individual issue and PR collapsed until you open it.

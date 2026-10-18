@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Run Kosmo's GitHub CLI through the user's login shell on macOS and Linux, so
+  apps opened from the desktop can find `gh` installed through shell profiles.
+  Preserve the project directory and noninteractive GitHub settings after startup.
 - Split Git diff comparison controls into branch and history dropdowns, with
   an ellipsis between the two sides. Keep branch menus free of ancestor entries,
   preserve history depth when switching branches, and wrap the toolbar in narrow

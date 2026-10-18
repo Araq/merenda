@@ -183,6 +183,9 @@ proc readGitHubSnapshot*(
 ): GitHubSnapshot =
   ## Read bounded lists using the project's remotes and the user's existing gh login.
   ## Each list may fail independently; successful results remain available.
+  ## On POSIX, the default `gh` command runs through the user's login shell so
+  ## desktop-launched apps can find commands installed by their shell profile.
+  ## Explicit executable paths run directly.
   result =
     GitHubSnapshot(rootPath: rootPath, state: state, kinds: kinds, itemLimit: itemLimit)
   let environment = newStringTable(modeCaseSensitive)
@@ -198,9 +201,9 @@ proc readGitHubSnapshot*(
     var fields = "number,title,body,url,state,author,labels,updatedAt"
     if kind == ghikPullRequest:
       fields.add ",isDraft,headRefName,baseRefName,reviewDecision,statusCheckRollup"
-    let response = runBackgroundCommand(
-      executable,
-      [
+    var commandExecutable = executable
+    var arguments =
+      @[
         command,
         "list",
         "--state",
@@ -209,7 +212,31 @@ proc readGitHubSnapshot*(
         $itemLimit,
         "--json",
         fields,
-      ],
+      ]
+    when defined(posix):
+      if executable == "gh":
+        commandExecutable = getEnv("SHELL")
+        if commandExecutable.len == 0:
+          commandExecutable = "/bin/sh"
+        # Login profiles can change cwd or GitHub settings. Reapply these after
+        # startup, and exec the command so cancellation still reaps gh itself.
+        var commandParts =
+          @[
+            "/usr/bin/env",
+            "-C",
+            absolutePath(rootPath),
+            "-u",
+            "GH_REPO",
+            "--",
+            "GH_PROMPT_DISABLED=1",
+            "GH_PAGER=cat",
+            executable,
+          ]
+        commandParts.add arguments
+        arguments = @["-l", "-c", "exec " & quoteShellCommand(commandParts)]
+    let response = runBackgroundCommand(
+      commandExecutable,
+      arguments,
       workingDirectory = rootPath,
       timeoutMilliseconds = timeoutMilliseconds,
       cancelled = cancelled,
