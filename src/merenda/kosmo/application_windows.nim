@@ -15,6 +15,10 @@ protocol KosmoContentCommandDispatch of nimkit.ResponderCommandDispatchProtocol:
       if content.onNewTerminal.isNil:
         return false
       content.onNewTerminal()
+    of KosmoShowTerminalAction:
+      if content.onShowTerminal.isNil:
+        return false
+      content.onShowTerminal()
     of KosmoShowFileExplorerAction:
       if content.onShowFileExplorer.isNil:
         return false
@@ -1073,6 +1077,9 @@ proc newKosmoApplication*(
       nimkit.newMenuItem("Open Quickly…", nimkit.actionSelector(KosmoQuickOpenAction))
     terminalItem =
       nimkit.newMenuItem("New Terminal", nimkit.actionSelector(KosmoNewTerminalAction))
+    showTerminalItem = nimkit.newMenuItem(
+      "Show Terminal", nimkit.actionSelector(KosmoShowTerminalAction)
+    )
     gitDiffItem =
       nimkit.newMenuItem("Show Git Diff", nimkit.actionSelector(KosmoShowGitDiffAction))
     gitHubItem = nimkit.newMenuItem(
@@ -1090,6 +1097,7 @@ proc newKosmoApplication*(
   openProjectItem.identifier = KosmoOpenProjectAction
   quickOpenItem.identifier = KosmoQuickOpenAction
   terminalItem.identifier = KosmoNewTerminalAction
+  showTerminalItem.identifier = KosmoShowTerminalAction
   gitDiffItem.identifier = KosmoShowGitDiffAction
   gitDiffItem.validates = false
   gitHubItem.identifier = KosmoShowGitHubAction
@@ -1104,6 +1112,7 @@ proc newKosmoApplication*(
   fileMenu.addSeparator()
   discard fileMenu.addItem(quickOpenItem)
   discard fileMenu.addItem(terminalItem)
+  discard fileMenu.addItem(showTerminalItem)
   discard fileMenu.addItem(gitDiffItem)
   discard fileMenu.addItem(gitHubItem)
   fileMenu.addSeparator()
@@ -1217,6 +1226,9 @@ proc newKosmoApplication*(
   documentView.onNewTerminal = proc() =
     if not controller.frontend.isNil:
       discard controller.frontend[].newTerminal()
+  documentView.onShowTerminal = proc() =
+    if not controller.frontend.isNil:
+      discard controller.frontend[].showTerminal()
   documentView.onFocusPanel = proc(panelNumber: int) =
     discard controller.focusPanel(panelNumber)
   controller.hosts.add mainHost
@@ -1266,6 +1278,13 @@ proc newKosmoApplication*(
     let active = manager.activeFrontend()
     if not active.isNil:
       discard active.newTerminal()
+  showTerminalItem.target = nimkit.newActionTarget(
+    nimkit.actionSelector(KosmoShowTerminalAction)
+  ) do(sender: nimkit.DynamicAgent):
+    discard sender
+    let active = manager.activeFrontend()
+    if not active.isNil:
+      discard active.showTerminal()
   gitDiffItem.target = nimkit.newActionTarget(
     nimkit.actionSelector(KosmoShowGitDiffAction)
   ) do(sender: nimkit.DynamicAgent):
@@ -1489,6 +1508,7 @@ proc loadKosmoKeyBindings*(
   frontend.dockController.editorInputPolicy = loaded.configuration.editorInput
   for host in frontend.dockController.hosts:
     frontend.dockController.installShortcutBindings(host.window)
+  frontend.dockController.syncKeyModeChoices()
   frontend.synchronizeKosmoMenuBindings()
   frontend.updateShortcutSettingsWindow()
 

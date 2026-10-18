@@ -2,10 +2,28 @@
 
 ## Unreleased
 
+- Split Git diff comparison controls into branch and history dropdowns, with
+  an ellipsis between the two sides. Keep branch menus free of ancestor entries,
+  preserve history depth when switching branches, and wrap the toolbar in narrow
+  panes so history values stay visible.
+
+- Add Cmd-J (Ctrl-J with the platform shortcut profile on Windows/Linux) to
+  focus an existing terminal, including hidden tabs and detached windows, or
+  open a terminal in the nearest pane to the right. Create a right split when
+  no pane is available. Keep New Terminal available for additional terminals.
+
+- Draw the Git diff refresh control with a vector icon so it remains visible
+  with every UI font, and fit Auto-refresh's label and switch to their content
+  with a smaller gap.
+
+- Match status-bar keymode presets against both editing settings, show custom
+  combinations without a checked preset, and refresh the selector after Moe
+  configuration edits.
+
 - Show project-relative paths in Find in Files tooltips, including match locations
   and Load more rows. Use the closest project root in workspaces with multiple roots.
 
-- Use compact +, -, and ⟳ controls on the right of Kosmo's Git diff toolbar,
+- Use compact +, -, and refresh controls on the right of Kosmo's Git diff toolbar,
   with Auto-refresh beside Refresh at the far right and descriptive tooltips and
   accessibility labels. Leave enough text space for the action symbols to render.
 

@@ -47,12 +47,14 @@ proc showGitDiff*(frontend: KosmoApplication, path = ""): bool {.discardable.}
 proc showGitHub*(frontend: KosmoApplication, path = ""): bool {.discardable.}
 proc newEditorTab*(frontend: KosmoApplication): bool {.discardable.}
 proc newTerminal*(frontend: KosmoApplication): bool {.discardable.}
+proc showTerminal*(frontend: KosmoApplication): bool {.discardable.}
 proc showSettings*(frontend: KosmoApplication): bool {.discardable.}
 proc openPath*(frontend: KosmoApplication, path: string): bool {.discardable.}
 proc show*(frontend: KosmoApplication)
 proc close*(frontend: KosmoApplication)
 proc setEditorInputPolicy*(frontend: KosmoApplication, policy: KosmoEditorInputPolicy)
 proc setForceInputMode*(frontend: KosmoApplication, enabled: bool)
+proc syncKeyModeChoices(controller: KosmoDockController)
 proc activateGroup(controller: KosmoDockController, view: KosmoEditorView)
 proc focusPanel(controller: KosmoDockController, panelNumber: int): bool
 proc focusGroup(controller: KosmoDockController, group: KosmoEditorGroup): bool
@@ -637,6 +639,9 @@ proc syncChrome(view: KosmoEditorView) =
     let text = view.editor.status().statusText(tabs, view.editor.workingDirectory())
     if view.statusLabel.text != text:
       view.statusLabel.text = text
+  if view.isActiveEditorGroup() and not view.tabsDelegate.isNil and
+      not view.tabsDelegate.dockController.isNil:
+    view.tabsDelegate.dockController[].syncKeyModeChoices()
   let command = view.editor.commandLine()
   view.syncCommandBar(command)
   let cursor = view.editor.cursor()
@@ -1763,6 +1768,9 @@ protocol KosmoEditorCommandDispatch of nimkit.ResponderCommandDispatchProtocol:
     of KosmoNewTerminalAction:
       if not controller.frontend.isNil:
         discard controller.frontend[].newTerminal()
+    of KosmoShowTerminalAction:
+      if not controller.frontend.isNil:
+        discard controller.frontend[].showTerminal()
     of KosmoShowGitHubAction:
       if not controller.frontend.isNil:
         discard controller.frontend[].showGitHub()
@@ -2737,7 +2745,15 @@ proc newKosmoStatusBar(label: nimkit.Label, withSidebarButtons: bool): KosmoStat
   discard result.withProtocol(KosmoStatusBarLayout)
 
 proc syncKeyModeChoices(controller: KosmoDockController) =
-  let identifier = if controller.editor.forceInputMode(): "normal" else: "moe"
+  var
+    identifier: string
+    title = "custom"
+  for mode in KosmoKeyModes:
+    if mode.inputPolicy == controller.editorInputPolicy and
+        mode.forceInput == controller.editor.forceInputMode():
+      identifier = mode.identifier
+      title = mode.title
+      break
   for host in controller.hosts:
     let choice = host.contentView.viewWithIdentifier(KosmoKeyModeSelectorIdentifier)
     if choice of nimkit.PopupMenuButton:
@@ -2747,8 +2763,8 @@ proc syncKeyModeChoices(controller: KosmoDockController) =
         let state = if selected: nimkit.bsOn else: nimkit.bsOff
         if item.state() != state:
           item.state = state
-        if selected:
-          button.title = item.title()
+      if button.title() != title:
+        button.title = title
 
 proc newKeyModeTarget(
     controller: KosmoDockController, mode: KosmoKeyMode
@@ -2946,6 +2962,9 @@ protocol KosmoEditorPaneCommandDispatch of nimkit.ResponderCommandDispatchProtoc
     of KosmoNewTerminalAction:
       if not controller.frontend.isNil:
         discard controller.frontend[].newTerminal()
+    of KosmoShowTerminalAction:
+      if not controller.frontend.isNil:
+        discard controller.frontend[].showTerminal()
     of KosmoShowGitHubAction:
       if not controller.frontend.isNil:
         discard controller.frontend[].showGitHub()

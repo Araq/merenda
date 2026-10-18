@@ -804,6 +804,27 @@ suite "Kosmo":
     check primaryChoice.title == "moe (vim)"
     check not frontend.forceInputMode()
 
+    let terminal = newKosmoTerminalView()
+    defer:
+      terminal.close()
+    frontend.application.addWindow(frontend.window)
+    frontend.application.activateWindow(detachedWindow)
+    let detachedGroup = frontend.editorGroups()[1]
+    require detachedWindow.makeFirstResponder(detachedGroup.editorView)
+    require frontend.openDocument(
+      newKosmoPaneDocument("detached-terminal", "Terminal", terminal)
+    )
+    require frontend.newEditorTab()
+    frontend.application.activateWindow(frontend.window)
+    require frontend.window.makeFirstResponder(frontend.editorView)
+    require frontend.window.dispatchKeyDown(
+      KeyEvent(key: keyJ, keyCode: keyJ.ord, modifiers: shortcutModifiers())
+    )
+    check frontend.application.keyWindow() == detachedWindow
+    check detachedWindow.firstResponder() == Responder(terminal)
+    check detachedGroup.pane.contentView == View(terminal)
+    check frontend.editorGroups().len == 2
+
   test "native tab bar sits above the editor grid":
     let frontend = newKosmoApplication(newApplication("Kosmo Tabs Layout Test"))
     defer:

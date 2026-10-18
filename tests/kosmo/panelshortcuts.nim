@@ -31,6 +31,40 @@ proc primaryShiftKeyEvent(key: Key): KeyEvent =
   )
 
 suite "Kosmo synthetic panel shortcuts":
+  test "show terminal shortcut reveals an existing hidden tab without splitting":
+    let
+      app = newApplication("Kosmo Show Terminal Shortcut")
+      frontend = newKosmoApplication(app, monitorsGitStatus = false)
+      terminal = newKosmoTerminalView()
+      shortcut = KeyEvent(key: keyJ, keyCode: keyJ.ord, modifiers: shortcutModifiers())
+    defer:
+      frontend.close()
+      terminal.close()
+    app.presentSyntheticWindow(frontend)
+    require frontend.window.sendAction(actionSelector(KosmoSplitVerticalAction))
+    let groups = frontend.editorGroups()
+    require groups.len == 2
+    require frontend.openDocument(
+      newKosmoPaneDocument("show-terminal", "Terminal", terminal)
+    )
+    require frontend.newEditorTab()
+    let tabCount = groups[1].pane.documentTabs.len
+    for policy in KosmoEditorInputPolicy:
+      frontend.setEditorInputPolicy(policy)
+      require frontend.window.makeFirstResponder(groups[0].editorView)
+      require frontend.window.dispatchKeyDown(shortcut)
+      check frontend.window.firstResponderIs(terminal)
+      check groups[1].pane.contentView == View(terminal)
+      check groups[1].pane.documentTabs.selectedDocumentTabItem().identifier ==
+        "show-terminal"
+      check groups[1].pane.documentTabs.len == tabCount
+      check frontend.editorGroups().len == 2
+      require frontend.window.dispatchKeyDown(shortcut)
+      check frontend.window.firstResponderIs(terminal)
+    require frontend.window.makeFirstResponder(frontend.fileTree)
+    require frontend.window.dispatchKeyDown(shortcut)
+    check frontend.window.firstResponderIs(terminal)
+
   for viewer in ["GitHub", "Git diff", "custom reader"]:
     test viewer & " background clicks focus its document from a terminal pane":
       let

@@ -1,4 +1,4 @@
-import std/[options, strutils, unicode, unittest]
+import std/[options, os, strutils, tempfiles, unicode, unittest]
 
 import figdraw
 import merenda/nimkit
@@ -27,7 +27,8 @@ suite "Kosmo settings":
   test "application menus expose document actions and both settings windows":
     for action in [
       KosmoNewFileAction, KosmoOpenFileAction, KosmoOpenProjectAction,
-      KosmoNewTerminalAction, KosmoShowSettingsAction, "showMerendaSettings",
+      KosmoNewTerminalAction, KosmoShowTerminalAction, KosmoShowSettingsAction,
+      "showMerendaSettings",
     ]:
       let item = app.mainMenu().menuItemForAction(action)
       require not item.isNil
@@ -62,6 +63,8 @@ suite "Kosmo settings":
     check choice.menu().len == 2
     check choice.menu()[0].title == "moe (vim)"
     check choice.menu()[1].title == "normal"
+    check choice.title == "custom"
+    frontend.setEditorInputPolicy(KosmoEditorInputPolicy.Vim)
     check choice.title == "moe (vim)"
     check choice.menu()[0].state == bsOn
     choice.popupPresentation = ppInline
@@ -113,11 +116,39 @@ suite "Kosmo settings":
     check editor.bufferText(bufferId).get() == "hello"
 
     frontend.setForceInputMode(true)
+    check choice.title == "custom"
+    check choice.menu()[0].state == bsOff
+    check choice.menu()[1].state == bsOff
+    frontend.setEditorInputPolicy(KosmoEditorInputPolicy.Native)
     check choice.title == "normal"
     check choice.menu()[1].state == bsOn
+    frontend.setEditorInputPolicy(KosmoEditorInputPolicy.Vim)
+    check choice.title == "custom"
     frontend.setForceInputMode(false)
     check choice.title == "moe (vim)"
     check choice.menu()[0].state == bsOn
+
+  test "loading shortcut configuration immediately updates the keymode preset":
+    let
+      root = createTempDir("kosmo-keymode-reload-", "")
+      path = root / "keybindings.json"
+      choice = PopupMenuButton(
+        frontend.contentView.viewWithIdentifier(KosmoKeyModeSelectorIdentifier)
+      )
+    defer:
+      removeFile(path)
+      removeDir(root)
+    require choice.menu()[1].perform(frontend.editorView)
+    check choice.title == "normal"
+    writeFile(path, """{"editorInput": "vim"}""")
+    check frontend.loadKosmoKeyBindings(path).errors.len == 0
+    check choice.title == "custom"
+    check choice.menu()[0].state == bsOff
+    check choice.menu()[1].state == bsOff
+    writeFile(path, """{"editorInput": "native"}""")
+    check frontend.loadKosmoKeyBindings(path).errors.len == 0
+    check choice.title == "normal"
+    check choice.menu()[1].state == bsOn
 
   test "shortcut settings update input behavior and show readable bindings":
     require settingsTabs.selectPage(KosmoShortcutsSettingsTabIdentifier)

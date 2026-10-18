@@ -161,6 +161,7 @@ type
     onFindInFiles: proc(replacing: bool) {.closure.}
     onQuickOpen: proc() {.closure.}
     onNewTerminal: proc() {.closure.}
+    onShowTerminal: proc() {.closure.}
     onFocusPanel: proc(panelNumber: int) {.closure.}
     quickOpenPanel: KosmoQuickOpenPanel
 

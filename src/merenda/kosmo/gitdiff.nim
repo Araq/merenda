@@ -29,6 +29,14 @@ const
   GitDiffDisclosureButtonPoolLimit = 128
   GitDiffFromRevisionIdentifierPrefix = "kosmo.gitDiff.from."
   GitDiffToRevisionIdentifierPrefix = "kosmo.gitDiff.to."
+  GitDiffRefreshIconSvg =
+    """<svg width="16" height="16" viewBox="0 0 24 24"><path d="M19 4v6h-6l2.4-2.4A6 6 0 1 0 18 12h2a8 8 0 1 1-3.2-6.4L19 4z"/></svg>"""
+  GitDiffHistoryChoices = [
+    (title: "-", suffix: ""),
+    (title: "^", suffix: "^"),
+    (title: "^2", suffix: "~2"),
+    (title: "^3", suffix: "~3"),
+  ]
 
 type
   GitDiffHighlightKey = tuple[source, language: string]
@@ -230,6 +238,11 @@ type
     comparisonButton*: nimkit.PopupMenuButton ## Compatibility alias for the To selector.
     fromRevisionButton*: nimkit.PopupMenuButton ## Selects the left diff revision.
     toRevisionButton*: nimkit.PopupMenuButton ## Selects the right diff revision.
+    fromHistoryButton*: nimkit.PopupMenuButton
+      ## First-parent history for the left revision.
+    toHistoryButton*: nimkit.PopupMenuButton
+      ## First-parent history for the right revision.
+    revisionSeparator: nimkit.Label
     expandButton*: nimkit.Button
     collapseButton*: nimkit.Button
     autoRefreshLabel: nimkit.Label
@@ -1242,6 +1255,14 @@ proc selectRevision(
 
 proc syncComparisonControls(panel: KosmoGitDiffPanel)
 
+func splitHistoryRevision(revision: string): tuple[base, suffix: string] =
+  for choice in GitDiffHistoryChoices:
+    if choice.suffix.len > 0 and revision.endsWith(choice.suffix):
+      return (revision[0 ..< revision.len - choice.suffix.len], choice.suffix)
+  (revision, "")
+
+proc selectedHistorySuffix(panel: KosmoGitDiffPanel, side: GitDiffRevisionSide): string
+
 func gitDiffStatusLabel(status: GitDiffFileStatus): string =
   case status
   of gdfsModified: "modified"
@@ -1266,7 +1287,12 @@ proc newGitDiffRevisionMenuItem(
   result.target = nimkit.newActionTarget(action) do(sender: nimkit.DynamicAgent):
     discard sender
     if not panel.isNil:
-      panel[].selectRevision(side, choice.revision, workingTree)
+      let revision =
+        if workingTree:
+          choice.revision
+        else:
+          choice.revision & panel[].selectedHistorySuffix(side)
+      panel[].selectRevision(side, revision, workingTree)
   result.validates = false
 
 func selectedFromRevision(comparison: GitDiffComparison): string =
@@ -1288,6 +1314,58 @@ func selectedToRevision(
     (revision: comparison.toRevision, workingTree: comparison.toWorkingTree)
   of gdckBranch:
     (revision: "HEAD", workingTree: false)
+
+proc selectedHistorySuffix(
+    panel: KosmoGitDiffPanel, side: GitDiffRevisionSide
+): string =
+  let revision =
+    if side == gdrsFrom:
+      panel.comparison.selectedFromRevision()
+    else:
+      panel.comparison.selectedToRevision().revision
+  revision.splitHistoryRevision().suffix
+
+proc newGitDiffHistoryMenuItem(
+    panel: WeakRef[KosmoGitDiffPanel], side: GitDiffRevisionSide, title, suffix: string
+): nimkit.MenuItem =
+  let action = nimkit.actionSelector("kosmo.selectGitDiffHistory")
+  result = nimkit.newMenuItem(title, action)
+  result.identifier =
+    (
+      if side == gdrsFrom: GitDiffFromRevisionIdentifierPrefix
+      else: GitDiffToRevisionIdentifierPrefix
+    ) & "history." & title
+  result.target = nimkit.newActionTarget(action) do(sender: nimkit.DynamicAgent):
+    discard sender
+    if not panel.isNil:
+      let current =
+        if side == gdrsFrom:
+          panel[].comparison.selectedFromRevision()
+        else:
+          panel[].comparison.selectedToRevision().revision
+      panel[].selectRevision(side, current.splitHistoryRevision().base & suffix)
+  result.validates = false
+
+proc syncHistoryControl(
+    panel: KosmoGitDiffPanel,
+    button: nimkit.PopupMenuButton,
+    side: GitDiffRevisionSide,
+    enabled: bool,
+) =
+  let
+    menu = button.menu()
+    selectedSuffix = panel.selectedHistorySuffix(side)
+  menu.removeAllItems()
+  for choice in GitDiffHistoryChoices:
+    let item = newGitDiffHistoryMenuItem(
+      panel.unsafeWeakRef(), side, choice.title, choice.suffix
+    )
+    if choice.suffix == selectedSuffix:
+      item.state = nimkit.bsOn
+      button.title = choice.title
+    discard menu.addItem(item)
+  button.enabled = enabled
+  button.toolTip = "Select how many commits back along first-parent history"
 
 proc revisionTitle(panel: KosmoGitDiffPanel, revision: string): string =
   for choice in panel.snapshot.revisions:
@@ -1315,24 +1393,32 @@ proc syncComparisonControls(panel: KosmoGitDiffPanel) =
       )
     )
     for choice in panel.snapshot.revisions:
-      discard fromMenu.addItem(
-        newGitDiffRevisionMenuItem(panel.unsafeWeakRef(), gdrsFrom, choice)
-      )
-      discard toMenu.addItem(
-        newGitDiffRevisionMenuItem(panel.unsafeWeakRef(), gdrsTo, choice)
-      )
+      if choice.revision.splitHistoryRevision().suffix.len == 0:
+        discard fromMenu.addItem(
+          newGitDiffRevisionMenuItem(panel.unsafeWeakRef(), gdrsFrom, choice)
+        )
+        discard toMenu.addItem(
+          newGitDiffRevisionMenuItem(panel.unsafeWeakRef(), gdrsTo, choice)
+        )
   let
     fromRevision = panel.comparison.selectedFromRevision()
     toSelection = panel.comparison.selectedToRevision()
-    fromIdentifier = gitDiffRevisionIdentifier(true, fromRevision)
-    toIdentifier =
-      gitDiffRevisionIdentifier(false, toSelection.revision, toSelection.workingTree)
-  panel.fromRevisionButton.title = "From: " & panel.revisionTitle(fromRevision)
+    fromBase = fromRevision.splitHistoryRevision().base
+    toBase = toSelection.revision.splitHistoryRevision().base
+    fromIdentifier = gitDiffRevisionIdentifier(true, fromBase)
+    toIdentifier = gitDiffRevisionIdentifier(false, toBase, toSelection.workingTree)
+  panel.fromRevisionButton.title = panel.revisionTitle(fromBase)
   panel.toRevisionButton.title =
-    "To: " & (
-      if toSelection.workingTree: "Working Tree"
-      else: panel.revisionTitle(toSelection.revision)
-    )
+    if toSelection.workingTree:
+      "Working Tree"
+    else:
+      panel.revisionTitle(toBase)
+  panel.syncHistoryControl(panel.fromHistoryButton, gdrsFrom, panel.snapshot.hasHead)
+  panel.syncHistoryControl(
+    panel.toHistoryButton,
+    gdrsTo,
+    panel.snapshot.hasHead and not toSelection.workingTree,
+  )
   panel.fromRevisionButton.toolTip = "Select the starting Git revision"
   panel.toRevisionButton.toolTip = "Select the ending Git revision"
   for item in fromMenu.items():
@@ -2760,6 +2846,9 @@ proc displayDiff*(panel: KosmoGitDiffPanel, snapshot: GitDiffSnapshot) =
   panel.repositoryScopePath = ""
   panel.fromRevisionButton.hidden = true
   panel.toRevisionButton.hidden = true
+  panel.fromHistoryButton.hidden = true
+  panel.toHistoryButton.hidden = true
+  panel.revisionSeparator.hidden = true
   inc panel.readGeneration
   panel.readingGit = false
   panel.applyDiff(snapshot)
@@ -2802,6 +2891,9 @@ proc displayRepositoryDiff*(
   panel.repositoryScopePath = scopePath
   panel.fromRevisionButton.hidden = false
   panel.toRevisionButton.hidden = false
+  panel.fromHistoryButton.hidden = false
+  panel.toHistoryButton.hidden = false
+  panel.revisionSeparator.hidden = false
   panel.syncComparisonControls()
   if changed and panel.readingGit:
     inc panel.readGeneration
@@ -2876,51 +2968,122 @@ proc close*(panel: KosmoGitDiffPanel) {.slot.} =
     panel.pool.join()
     discard getCurrentSigilThread().pollAll(NonBlocking)
 
+proc historyControlWidth(button: nimkit.PopupMenuButton): float32 =
+  var style = button.effectiveAppearance().resolveComboBoxStyle(
+      nimkit.controlStyle(
+        nimkit.srComboBox, id = button.styleId, classes = button.styleClasses
+      )
+    )
+  style.minSize.width = 0
+  style.comboBoxControlSize(nimkit.textNaturalSize("^3", style.text)).width + 2
+
 protocol GitDiffLayout of nimkit.ViewLayoutProtocol:
   method layoutSubviews(panel: KosmoGitDiffPanel) =
     let
       bounds = panel.bounds()
       inset = min(12.0'f32, bounds.size.width * 0.05'f32)
       gap = min(8.0'f32, bounds.size.width * 0.03'f32)
+      availableWidth = max(bounds.size.width - inset * 2.0'f32, 0)
       hasComparison = not panel.fromRevisionButton.hidden
-      controlWidth =
-        44.0'f32 * 3 + (if hasComparison: 290.0'f32 else: 0.0'f32) + 82.0'f32 + 54.0'f32
-      availableWidth = max(
-        bounds.size.width - inset * 2.0'f32 -
-          gap * (if hasComparison: 5.0'f32 else: 3.0'f32) - 4.0'f32,
-        0,
+      labelWidth = panel.autoRefreshLabel.sizeThatFits().width
+      switchWidth = panel.autoRefreshSwitch.sizeThatFits().width
+      labelGap = 2.0'f32
+      separatorWidth =
+        if hasComparison:
+          panel.revisionSeparator.sizeThatFits().width
+        else:
+          0.0'f32
+      historyWidth = panel.fromHistoryButton.historyControlWidth()
+      historyGap = 4.0'f32
+      comparisonMinimumWidth =
+        (96.0'f32 + historyWidth + historyGap) * 2 + separatorWidth + gap * 2
+      actionContentWidth = 44.0'f32 * 3 + labelWidth + switchWidth
+      actionGroupWidth = actionContentWidth + gap * 3 + labelGap
+      wrapActions =
+        hasComparison and
+        comparisonMinimumWidth + gap + actionGroupWidth > availableWidth
+      comparisonWidth =
+        if wrapActions:
+          availableWidth
+        else:
+          max(availableWidth - actionGroupWidth - gap, 0)
+      stackRevisions = hasComparison and comparisonMinimumWidth > comparisonWidth
+      revisionWidth = min(
+        145.0'f32,
+        max(
+          if stackRevisions:
+            comparisonWidth - historyWidth - historyGap - separatorWidth - gap
+          else:
+            (
+              comparisonWidth - historyWidth * 2 - historyGap * 2 - separatorWidth -
+              gap * 2
+            ) * 0.5'f32,
+          0,
+        ),
       )
-      scale = min(availableWidth / controlWidth, 1.0'f32)
+      toRevisionY = if stackRevisions: 52.0'f32 else: 8.0'f32
+      actionY =
+        if stackRevisions:
+          96.0'f32
+        elif wrapActions:
+          52.0'f32
+        else:
+          8.0'f32
+      scale = min(max(availableWidth - gap * 3 - labelGap, 0) / actionContentWidth, 1)
       refreshWidth = 44.0'f32 * scale
-      revisionWidth = 145.0'f32 * scale
       actionWidth = 44.0'f32 * scale
-      autoRefreshLabelWidth = 82.0'f32 * scale
-      autoRefreshWidth = 54.0'f32 * scale
+      autoRefreshLabelWidth = labelWidth * scale
+      autoRefreshWidth = switchWidth * scale
       fromRevisionX = inset
-      toRevisionX = fromRevisionX + revisionWidth + gap
+      fromHistoryX = fromRevisionX + revisionWidth + historyGap
+      separatorX = fromHistoryX + historyWidth + gap
+      toRevisionX =
+        if stackRevisions:
+          inset
+        else:
+          separatorX + separatorWidth + gap
+      toHistoryX = toRevisionX + revisionWidth + historyGap
       refreshX = bounds.size.width - inset - refreshWidth
       autoRefreshX = refreshX - gap - autoRefreshWidth
-      autoRefreshLabelX = autoRefreshX - 4.0'f32 - autoRefreshLabelWidth
+      autoRefreshLabelX = autoRefreshX - labelGap - autoRefreshLabelWidth
       collapseX = autoRefreshLabelX - gap - actionWidth
       expandX = collapseX - gap - actionWidth
-    panel.refreshButton.setFrameFromLayout(nimkit.rect(refreshX, 8, refreshWidth, 28))
+    panel.refreshButton.setFrameFromLayout(
+      nimkit.rect(refreshX, actionY, refreshWidth, 28)
+    )
     if hasComparison:
       panel.fromRevisionButton.setFrameFromLayout(
         nimkit.rect(fromRevisionX, 8, revisionWidth, 28)
       )
       panel.toRevisionButton.setFrameFromLayout(
-        nimkit.rect(toRevisionX, 8, revisionWidth, 28)
+        nimkit.rect(toRevisionX, toRevisionY, revisionWidth, 28)
       )
-    panel.expandButton.setFrameFromLayout(nimkit.rect(expandX, 8, actionWidth, 28))
-    panel.collapseButton.setFrameFromLayout(nimkit.rect(collapseX, 8, actionWidth, 28))
+      panel.fromHistoryButton.setFrameFromLayout(
+        nimkit.rect(fromHistoryX, 8, historyWidth, 28)
+      )
+      panel.revisionSeparator.setFrameFromLayout(
+        nimkit.rect(separatorX, 8, separatorWidth, 28)
+      )
+      panel.toHistoryButton.setFrameFromLayout(
+        nimkit.rect(toHistoryX, toRevisionY, historyWidth, 28)
+      )
+    panel.expandButton.setFrameFromLayout(
+      nimkit.rect(expandX, actionY, actionWidth, 28)
+    )
+    panel.collapseButton.setFrameFromLayout(
+      nimkit.rect(collapseX, actionY, actionWidth, 28)
+    )
     panel.autoRefreshLabel.setFrameFromLayout(
-      nimkit.rect(autoRefreshLabelX, 8, autoRefreshLabelWidth, 28)
+      nimkit.rect(autoRefreshLabelX, actionY, autoRefreshLabelWidth, 28)
     )
     panel.autoRefreshSwitch.setFrameFromLayout(
-      nimkit.rect(autoRefreshX, 8, autoRefreshWidth, 28)
+      nimkit.rect(autoRefreshX, actionY, autoRefreshWidth, 28)
     )
+    let toolbarHeight = actionY + 36
     panel.scrollView.setFrameFromLayout(
-      nimkit.rect(0, 44, bounds.size.width, max(bounds.size.height - 44, 0))
+      nimkit.rect(
+        0, toolbarHeight, bounds.size.width, max(bounds.size.height - toolbarHeight, 0)
+      )
     )
     panel.syncDisclosureButtons()
 
@@ -3057,11 +3220,14 @@ proc newKosmoGitDiffPanel(
   startLocalThreadDefault()
   result = KosmoGitDiffPanel(
     markdownView: nimkit.newMarkdownView(),
-    refreshButton: nimkit.newButton("⟳"),
+    refreshButton: nimkit.newButton("Refresh Git diff"),
     fromRevisionButton:
-      nimkit.newPopupMenuButton("From: HEAD", nimkit.newMenu("From Revision")),
+      nimkit.newPopupMenuButton("HEAD", nimkit.newMenu("From Revision")),
     toRevisionButton:
-      nimkit.newPopupMenuButton("To: Working Tree", nimkit.newMenu("To Revision")),
+      nimkit.newPopupMenuButton("Working Tree", nimkit.newMenu("To Revision")),
+    fromHistoryButton: nimkit.newPopupMenuButton("-", nimkit.newMenu("From History")),
+    toHistoryButton: nimkit.newPopupMenuButton("-", nimkit.newMenu("To History")),
+    revisionSeparator: nimkit.newLabel("…"),
     expandButton: nimkit.newButton("+"),
     collapseButton: nimkit.newButton("-"),
     autoRefreshLabel: nimkit.newLabel("Auto-refresh"),
@@ -3114,7 +3280,16 @@ proc newKosmoGitDiffPanel(
   result.markdownView.toolTip = rootPath
   result.fromRevisionButton.hidden = not refreshesRepository
   result.toRevisionButton.hidden = not refreshesRepository
+  result.fromHistoryButton.hidden = not refreshesRepository
+  result.toHistoryButton.hidden = not refreshesRepository
+  result.revisionSeparator.hidden = not refreshesRepository
+  result.fromHistoryButton.accessibilityLabel = "Git diff from history"
+  result.toHistoryButton.accessibilityLabel = "Git diff to history"
+  result.revisionSeparator.identifier = "kosmo.gitDiff.revisionSeparator"
+  result.revisionSeparator.alignment = nimkit.taCenter
   result.refreshButton.accessibilityLabel = "Refresh Git diff"
+  result.refreshButton.icon =
+    nimkit.newSvgMtsdfResource(GitDiffRefreshIconSvg, "kosmo-git-diff-refresh")
   result.refreshButton.toolTip = "Refresh Git diff"
   result.expandButton.accessibilityLabel = "Expand all files"
   result.expandButton.toolTip = "Expand all files"
@@ -3184,7 +3359,8 @@ proc newKosmoGitDiffPanel(
   )
   for view in [
     nimkit.View(result.refreshButton), result.fromRevisionButton,
-    result.toRevisionButton, result.expandButton, result.collapseButton,
+    result.fromHistoryButton, result.revisionSeparator, result.toRevisionButton,
+    result.toHistoryButton, result.expandButton, result.collapseButton,
     result.autoRefreshLabel, result.autoRefreshSwitch, result.scrollView,
   ]:
     result.addSubview(view)
