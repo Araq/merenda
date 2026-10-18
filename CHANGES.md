@@ -4,6 +4,11 @@
 
 ## 0.27.6
 
+- Keep editor Find scoped to its pane, including its query, highlights, errors,
+  and match navigation when other panes repaint or search the same buffer.
+  Closing Find in one pane preserves the other panes' searches. Switching tabs
+  rechecks matches without moving the restored cursor.
+
 - End Moe's active Visual selection before GUI Find moves to a match, so copying
   selected text into Find does not select the intervening document text.
 

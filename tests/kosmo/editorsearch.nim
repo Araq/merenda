@@ -12,6 +12,37 @@ proc isFocused(window: Window, control: View): bool =
     (window.firstResponder() == control or window.fieldEditorClient() == control)
 
 suite "Kosmo editor search":
+  test "search snapshots preserve errors and zero width continuation without moving the cursor":
+    let editor = newKosmoEditor(text = "cat\ncat")
+    defer:
+      editor.close()
+    require editor.searchFrom(
+      "$", KosmoBufferCursor(line: 0, column: 0), regularExpression = true
+    )
+    check editor.bufferCursor() == KosmoBufferCursor(line: 0, column: 2)
+    let endSearch = editor.captureSearchState()
+    require editor.searchFrom("cat", KosmoBufferCursor(line: 0, column: 0))
+    let
+      wordSearch = editor.captureSearchState()
+      cursor = editor.bufferCursor()
+    editor.restoreSearchState(endSearch)
+    check editor.bufferCursor() == cursor
+    check editor.searchQuery() == "$"
+    require editor.revealLocation(0, 2)
+    require editor.searchFrom("$", editor.bufferCursor(), regularExpression = true)
+    check editor.bufferCursor() == KosmoBufferCursor(line: 1, column: 2)
+    require not editor.searchFrom("[", editor.bufferCursor(), regularExpression = true)
+    let invalidSearch = editor.captureSearchState()
+    require editor.searchError().len > 0
+    editor.restoreSearchState(wordSearch)
+    check editor.searchQuery() == "cat"
+    check editor.searchError() == ""
+    editor.restoreSearchState(invalidSearch)
+    check editor.searchError().len > 0
+    editor.restoreSearchState(KosmoSearchState())
+    check editor.searchQuery() == ""
+    check editor.searchError() == ""
+
   test "GUI search collapses character line and block selections before moving":
     for visualKey in ["v", "V", "C-v"]:
       checkpoint "Selection mode " & visualKey

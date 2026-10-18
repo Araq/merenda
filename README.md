@@ -510,6 +510,9 @@ the original cell positions, including wide Unicode characters.
 Terminal find centers older matches where possible and stays at the bottom for
 matches near the end of the history.
 
+Each editor pane keeps its own Find query and highlights, including when two
+panes show the same buffer. Navigating matches or closing Find affects that pane.
+Changing tabs rechecks the query without moving the caret.
 Searching copied text ends the editor's previous selection before moving to a match.
 
 Editor search and the Find sidebar open with replacement controls collapsed.

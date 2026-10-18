@@ -43,6 +43,8 @@ type
     documentTabs*: nimkit.DocumentTabs
     searchBar: KosmoSearchBar
     searchOrigin: KosmoBufferCursor
+    searchState: KosmoSearchState
+    searchBufferId: Option[KosmoBufferId]
     renderBuffer: RenderBuffer
     statusLabel: nimkit.Label
     commandBar: KosmoCommandBar

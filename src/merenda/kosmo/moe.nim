@@ -110,6 +110,15 @@ type
     contentVersion: int
     match, cursor: moeTypes.BufferPosition
 
+  KosmoSearchState* = object
+    ## Saved search projection for one frontend pane. Default means no search.
+    pattern: Option[TextSearchPattern]
+    location: Option[SearchLocation]
+    query, error: string
+    regularExpression, ignoreCase: bool
+    nativeSearch: moeTypes.SearchSpec
+    nativeHighlightsDisabled: bool
+
   KosmoEditor* = ref object
     editor: Editor
     nimLspCommand: string
@@ -137,10 +146,7 @@ type
     recoveryCheckpoint: Option[MonoTime]
     recoveryFingerprint: Hash
     recoverySessions: seq[string]
-    xSearchPattern: Option[TextSearchPattern]
-    xSearchLocation: Option[SearchLocation]
-    xSearchQuery, xSearchError: string
-    xSearchRegularExpression, xSearchIgnoreCase: bool
+    searchState: KosmoSearchState
 
   KosmoBufferId* = distinct int
     ## Stable identity for a Moe buffer without exposing Moe's buffer types.
@@ -1516,39 +1522,39 @@ proc prepareSearch(editor: KosmoEditor, query: string, regularExpression: bool):
   let state = editor.editor.state
   let ignoreCase =
     shouldIgnoreCase(query, state.input.search.ignorecase, state.input.search.smartcase)
-  editor.xSearchError = ""
+  editor.searchState.error = ""
   state.input.search.last.pattern = ""
   state.input.search.hlsearchTempDisabled = true
-  if editor.xSearchPattern.isSome and editor.xSearchQuery == query and
-      editor.xSearchRegularExpression == regularExpression and
-      editor.xSearchIgnoreCase == ignoreCase:
+  if editor.searchState.pattern.isSome and editor.searchState.query == query and
+      editor.searchState.regularExpression == regularExpression and
+      editor.searchState.ignoreCase == ignoreCase:
     return true
-  editor.xSearchPattern = none(TextSearchPattern)
-  editor.xSearchLocation = none(SearchLocation)
-  editor.xSearchQuery = ""
+  editor.searchState.pattern = none(TextSearchPattern)
+  editor.searchState.location = none(SearchLocation)
+  editor.searchState.query = ""
   # Kosmo paints its own results so Reni-only syntax never reaches Moe's matcher.
   try:
-    editor.xSearchPattern = some(
+    editor.searchState.pattern = some(
       initTextSearchPattern(query, regularExpression, caseSensitive = not ignoreCase)
     )
-    editor.xSearchQuery = query
-    editor.xSearchRegularExpression = regularExpression
-    editor.xSearchIgnoreCase = ignoreCase
+    editor.searchState.query = query
+    editor.searchState.regularExpression = regularExpression
+    editor.searchState.ignoreCase = ignoreCase
     result = true
   except TextSearchError as error:
-    editor.xSearchError = error.msg
+    editor.searchState.error = error.msg
     state.statusMessage = "Search error: " & error.msg
 
 func searchError*(editor: KosmoEditor): string =
-  editor.xSearchError
+  editor.searchState.error
 
 proc searchStart(
     editor: KosmoEditor, cursor: moeTypes.BufferPosition
 ): moeTypes.BufferPosition =
   ## A normal-mode cursor is clamped before an end-of-line zero-width match.
   result = cursor
-  if editor.xSearchLocation.isSome:
-    let location = editor.xSearchLocation.get
+  if editor.searchState.location.isSome:
+    let location = editor.searchState.location.get
     let buffer = editor.editor.activeBuffer
     if location.bufferId == buffer.id and
         location.contentVersion == buffer.contentVersion and location.cursor == cursor:
@@ -1557,7 +1563,7 @@ proc searchStart(
 proc revealSearchMatch(editor: KosmoEditor, match: moeTypes.BufferPosition) =
   discard editor.revealLocation(match.line, match.column, centered = true)
   let buffer = editor.editor.activeBuffer
-  editor.xSearchLocation = some(
+  editor.searchState.location = some(
     SearchLocation(
       bufferId: buffer.id,
       contentVersion: buffer.contentVersion,
@@ -1573,7 +1579,7 @@ proc searchPosition(
     inclusive = false,
 ): Option[moeTypes.BufferPosition] =
   let buffer = editor.editor.activeBuffer
-  let pattern = editor.xSearchPattern.get
+  let pattern = editor.searchState.pattern.get
   let origin = clamp(start.line, 0, buffer.len - 1)
   for step in 0 .. buffer.len:
     let lineIndex =
@@ -1624,31 +1630,48 @@ proc searchFrom*(
     let match =
       editor.searchPosition(editor.searchStart(editor.editor.cursor), direction)
     if match.isNone:
-      editor.xSearchLocation = none(SearchLocation)
+      editor.searchState.location = none(SearchLocation)
       editor.editor.state.statusMessage = "Pattern not found: " & query
       return
     editor.revealSearchMatch(match.get)
     editor.editor.state.statusMessage = "Found: " & query
     result = true
   except TextSearchError as error:
-    editor.xSearchError = error.msg
-    editor.xSearchPattern = none(TextSearchPattern)
-    editor.xSearchLocation = none(SearchLocation)
+    editor.searchState.error = error.msg
+    editor.searchState.pattern = none(TextSearchPattern)
+    editor.searchState.location = none(SearchLocation)
     editor.editor.state.statusMessage = "Search error: " & error.msg
+
+proc captureSearchState*(editor: KosmoEditor): KosmoSearchState =
+  ## Retain the compiled pattern, highlights, errors, and match continuation.
+  if editor.isNil or editor.editor.isNil:
+    return
+  result = editor.searchState
+  result.nativeSearch = editor.editor.state.input.search.last
+  result.nativeHighlightsDisabled =
+    editor.editor.state.input.search.hlsearchTempDisabled
+
+proc restoreSearchState*(editor: KosmoEditor, state: KosmoSearchState) =
+  ## Restore a pane's search without moving its cursor or executing a search.
+  if editor.isNil or editor.editor.isNil:
+    return
+  editor.searchState = state
+  editor.editor.state.input.search.last = state.nativeSearch
+  editor.editor.state.input.search.hlsearchTempDisabled = state.nativeHighlightsDisabled
 
 proc clearSearch*(editor: KosmoEditor) =
   ## Clear both GUI and native search highlights.
   if not editor.isNil and not editor.editor.isNil:
-    editor.xSearchPattern = none(TextSearchPattern)
-    editor.xSearchLocation = none(SearchLocation)
-    editor.xSearchQuery = ""
-    editor.xSearchError = ""
+    editor.searchState.pattern = none(TextSearchPattern)
+    editor.searchState.location = none(SearchLocation)
+    editor.searchState.query = ""
+    editor.searchState.error = ""
     editor.editor.state.input.search.last.pattern = ""
     editor.editor.state.input.search.hlsearchTempDisabled = true
 
 func searchQuery*(editor: KosmoEditor): string =
   if not editor.isNil and not editor.editor.isNil:
-    result = editor.xSearchQuery
+    result = editor.searchState.query
 
 proc replaceSearch*(
     editor: KosmoEditor,
@@ -1672,7 +1695,7 @@ proc replaceSearch*(
   var changes: seq[Replacement]
   var resume = matchCursor
   try:
-    let pattern = editor.xSearchPattern.get
+    let pattern = editor.searchState.pattern.get
     let templateText = pattern.initTextSearchReplacement(replacement)
     for lineIndex in 0 ..< buffer.len:
       if all or lineIndex == matchCursor.line:
@@ -1701,7 +1724,7 @@ proc replaceSearch*(
           changes.add Replacement(line: lineIndex, text: text)
           result += count
   except TextSearchError as error:
-    editor.xSearchError = error.msg
+    editor.searchState.error = error.msg
     state.statusMessage = "Replacement error: " & error.msg
     return 0
   if changes.len == 0:
@@ -1728,10 +1751,10 @@ proc replaceSearch*(
     if next.isSome:
       editor.revealSearchMatch(next.get)
     else:
-      editor.xSearchLocation = none(SearchLocation)
+      editor.searchState.location = none(SearchLocation)
       discard editor.revealLocation(cursor.line, cursor.column, centered = true)
   except TextSearchError as error:
-    editor.xSearchError = error.msg
+    editor.searchState.error = error.msg
     state.statusMessage = state.statusMessage & "; search error: " & error.msg
 
 proc hasSearchMatches*(
@@ -1743,12 +1766,12 @@ proc hasSearchMatches*(
     return
   try:
     for line in 0 ..< editor.editor.activeBuffer.len:
-      for match in editor.xSearchPattern.get.findMatches(
+      for match in editor.searchState.pattern.get.findMatches(
         editor.editor.activeBuffer.getLine(line)
       ):
         return true
   except TextSearchError as error:
-    editor.xSearchError = error.msg
+    editor.searchState.error = error.msg
     editor.editor.state.statusMessage = "Search error: " & error.msg
 
 proc tabMatchesPath(editor: KosmoEditor, tab: KosmoTab, path: string): bool =
@@ -2526,7 +2549,8 @@ proc matterHighlightingController*(editor: KosmoEditor): MatterHighlighting =
 
 proc renderSearchHighlights(editor: KosmoEditor, target: var RenderBuffer) =
   ## Project Reni results using Moe's own wrap and display-column geometry.
-  if editor.xSearchPattern.isNone or editor.editor.activeWindow.visualSelection.active or
+  if editor.searchState.pattern.isNone or
+      editor.editor.activeWindow.visualSelection.active or
       not editor.editor.state.input.search.hlsearchTempDisabled:
     return
   let e = editor.editor
@@ -2544,7 +2568,7 @@ proc renderSearchHighlights(editor: KosmoEditor, target: var RenderBuffer) =
       if visible.fold.isNone:
         let line = window.buffer.getLine(visible.line)
         var ranges: seq[tuple[first, last: int]]
-        for match in editor.xSearchPattern.get.findMatches(line):
+        for match in editor.searchState.pattern.get.findMatches(line):
           ranges.add (line.byteToCharPos(match.first), line.byteToCharPos(match.last))
         if ranges.len > 0:
           for row in 0 ..< min(visible.rows, height - visible.startRow):
@@ -2577,8 +2601,8 @@ proc renderSearchHighlights(editor: KosmoEditor, target: var RenderBuffer) =
                 )
               x += max(cell.width, 1)
   except TextSearchError as error:
-    editor.xSearchPattern = none(TextSearchPattern)
-    editor.xSearchError = error.msg
+    editor.searchState.pattern = none(TextSearchPattern)
+    editor.searchState.error = error.msg
     e.state.statusMessage = "Search error: " & error.msg
 
 proc renderMatterFrame(editor: KosmoEditor, buffer: var RenderBuffer) =

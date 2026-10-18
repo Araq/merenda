@@ -385,6 +385,7 @@ proc saveViewState(view: KosmoEditorView) =
   let state = view.editor.captureViewState()
   if state.bufferId != view.selectedBufferId:
     return
+  view.searchState = view.editor.captureSearchState()
   let index = view.viewStateIndex(view.selectedBufferId.get)
   if index >= 0:
     view.viewStates[index] = state
@@ -423,8 +424,10 @@ proc selectVisibleBuffer(view: KosmoEditorView, tabs: openArray[KosmoTab]) =
       view.editor.mode() in {KosmoEditorMode.Command, KosmoEditorMode.Other}:
     return
   let controller = view.tabsDelegate.dockController
+  var switchingProjection = false
   if not controller.isNil:
     let owner = controller[].projectedEditorView
+    switchingProjection = owner.isNil or owner[] != view
     if not owner.isNil and owner[] != view:
       owner[].saveViewState()
   view.saveViewState()
@@ -447,8 +450,24 @@ proc selectVisibleBuffer(view: KosmoEditorView, tabs: openArray[KosmoTab]) =
         view.editor.restoreViewState(view.viewStates[index], view.renderBuffer)
       else:
         view.editor.selectTab(view.selectedBufferId.get)
-    if restored and not controller.isNil:
-      controller[].projectedEditorView = view.unsafeWeakRef()
+    if restored:
+      if not controller.isNil:
+        if switchingProjection:
+          view.editor.restoreSearchState(view.searchState)
+        controller[].projectedEditorView = view.unsafeWeakRef()
+      if view.searchBufferId != view.selectedBufferId:
+        view.searchBufferId = view.selectedBufferId
+        if not view.searchBar.isNil and not view.searchBar.hidden():
+          view.searchOrigin = view.editor.bufferCursor()
+          if view.searchBar.query().len == 0:
+            view.editor.clearSearch()
+            view.searchBar.hasMatches = false
+          else:
+            view.searchBar.hasMatches = view.editor.hasSearchMatches(
+              view.searchBar.query(),
+              regularExpression = view.searchBar.regularExpression,
+            )
+          view.searchBar.errorMessage = view.editor.searchError()
 
 proc adoptActiveBuffer(view: KosmoEditorView): bool =
   if not view.usesBufferSubset:
@@ -1388,9 +1407,10 @@ proc editorPaste(view: KosmoEditorView) =
 
 proc refreshEditorSearch(
     view: KosmoEditorView,
-    start: KosmoBufferCursor,
+    start = none(KosmoBufferCursor),
     direction = KosmoSearchDirection.Forward,
 ) =
+  view.selectVisibleBuffer(view.visibleTabs(view.editor.tabs()))
   let query = view.searchBar.query()
   if query.len == 0:
     discard view.editor.revealLocation(view.searchOrigin.line, view.searchOrigin.column)
@@ -1399,24 +1419,27 @@ proc refreshEditorSearch(
     view.searchBar.errorMessage = ""
   else:
     view.searchBar.hasMatches = view.editor.searchFrom(
-      query, start, direction, regularExpression = view.searchBar.regularExpression
+      query,
+      start.get(view.editor.bufferCursor()),
+      direction,
+      regularExpression = view.searchBar.regularExpression,
     )
     view.searchBar.errorMessage = view.editor.searchError()
   view.refresh()
 
 proc editorSearchQueryDidChange(view: KosmoEditorView, query: string) =
   discard query
-  view.refreshEditorSearch(view.searchOrigin)
+  view.refreshEditorSearch(some(view.searchOrigin))
 
 proc findPrevious*(view: KosmoEditorView) =
   ## Find the previous Moe match while retaining the floating search field.
   if not view.isNil and not view.searchBar.isNil:
-    view.refreshEditorSearch(view.editor.bufferCursor(), KosmoSearchDirection.Backward)
+    view.refreshEditorSearch(direction = KosmoSearchDirection.Backward)
 
 proc findNext*(view: KosmoEditorView) =
   ## Find the next Moe match while retaining the floating search field.
   if not view.isNil and not view.searchBar.isNil:
-    view.refreshEditorSearch(view.editor.bufferCursor())
+    view.refreshEditorSearch()
 
 proc replaceMatch*(view: KosmoEditorView, all = false): int {.discardable.} =
   if view.isNil or view.searchBar.isNil:
@@ -1445,6 +1468,7 @@ proc dismissSearch*(view: KosmoEditorView) =
   ## Hide editor search, clear Moe's highlights, and return focus to the editor.
   if view.isNil or view.searchBar.isNil:
     return
+  view.selectVisibleBuffer(view.visibleTabs(view.editor.tabs()))
   view.searchBar.hidden = true
   view.editor.clearSearch()
   view.refresh()
@@ -1459,6 +1483,7 @@ proc showSearch*(view: KosmoEditorView, replacing = false): bool {.discardable.}
   let owner = view.window()
   if not (owner of nimkit.Window):
     return
+  view.selectVisibleBuffer(view.visibleTabs(view.editor.tabs()))
   if view.searchBar.hidden():
     view.searchOrigin = view.editor.bufferCursor()
     view.searchBar.query = ""

@@ -82,6 +82,15 @@ proc newSearchInputFrontend(): KosmoApplication =
   require result.window.makeFirstResponder(result.editorView)
   result.application.activateWindow(result.window)
 
+proc splitSearchEditor(frontend: KosmoApplication): KosmoEditorView =
+  require frontend.window.pressSearchKey(keyW, {nimkit.kmControl})
+  require frontend.window.pressSearchKey(keyV)
+  require frontend.editorGroups().len == 2
+  for group in frontend.editorGroups():
+    if group.editorView != frontend.editorView:
+      result = group.editorView
+  require not result.isNil
+
 proc openSearchInput(frontend: KosmoApplication, inFiles, replacing: bool): TextField =
   var modifiers = frontend.shortcutProfile().primaryModifiers()
   if inFiles:
@@ -115,6 +124,145 @@ template withSearchClipboard(body: untyped) =
     body
 
 suite "Kosmo search synthetic input":
+  test "open Find updates match buttons and origin when switching editor tabs":
+    let
+      frontend = newSearchInputFrontend()
+      window = frontend.window
+      view = frontend.editorView
+      editor = view.editor
+      modifiers = frontend.shortcutProfile().primaryModifiers()
+    defer:
+      frontend.close()
+    require editor.handleKey("i")
+    require editor.handleTextInput("start\nalpha")
+    require editor.handleKey("Esc")
+    require editor.revealLocation(0, 0)
+    view.refresh()
+    require window.pressSearchKey(keyF, modifiers)
+    window.typeSearchText("alpha")
+    let
+      next = view.buttonWithLabel("Next editor text match")
+      originalCursor = editor.bufferCursor()
+    require next.enabled()
+    require originalCursor == KosmoBufferCursor(line: 1, column: 0)
+    require frontend.newEditorTab()
+    require editor.handleKey("i")
+    require editor.handleTextInput("a different document")
+    require editor.handleKey("Esc")
+    view.refresh()
+    require view.searchVisible()
+    check not next.enabled()
+    require view.documentTabs.selectDocumentTabAtIndex(0)
+    view.refresh()
+    check next.enabled()
+    check editor.bufferCursor() == originalCursor
+    require window.makeFirstResponder(view.searchField())
+    require window.pressSearchKey(keyA, modifiers)
+    require window.pressSearchKey(keyBackspace)
+    check editor.bufferCursor() == originalCursor
+
+  test "Enter searches the owning editor pane after another pane renders":
+    let
+      frontend = newSearchInputFrontend()
+      window = frontend.window
+      target = frontend.editorView
+      editor = target.editor
+      modifiers = frontend.shortcutProfile().primaryModifiers()
+    defer:
+      frontend.close()
+    require editor.handleKey("i")
+    require editor.handleTextInput(
+      "let xTrackingItem = false\nmiddle\nxTrackingItem = true"
+    )
+    require editor.handleKey("Esc")
+    target.refresh()
+    let targetId = editor.tabs()[0].id
+    let other = frontend.splitSearchEditor()
+    require frontend.newEditorTab()
+    require editor.handleKey("i")
+    require editor.handleTextInput("a different document without that identifier")
+    require editor.handleKey("Esc")
+    other.refresh()
+    require window.clickAt(target.pointToWindow(initPoint(32, 32)))
+    require window.pressSearchKey(keyF, modifiers)
+    window.typeSearchText("xTrackingItem")
+    let
+      previous = target.buttonWithLabel("Previous editor text match")
+      next = target.buttonWithLabel("Next editor text match")
+    require previous.enabled()
+    require next.enabled()
+    for _ in 0 ..< 3:
+      other.refresh()
+      var activeId: KosmoBufferId
+      for tab in editor.tabs():
+        if tab.active:
+          activeId = tab.id
+      require activeId != targetId
+      require window.pressSearchKey(keyEnter)
+      check previous.enabled()
+      check next.enabled()
+      check not editor.status().message.startsWith("Pattern not found:")
+      check window.searchFieldFocused(target.searchField())
+      check target.searchField().text() == "xTrackingItem"
+
+  test "search highlights and dismissal stay isolated between editor panes":
+    for sameBuffer in [false, true]:
+      checkpoint "Shared buffer: " & $sameBuffer
+      let
+        frontend = newSearchInputFrontend()
+        window = frontend.window
+        target = frontend.editorView
+        editor = target.editor
+        modifiers = frontend.shortcutProfile().primaryModifiers()
+      defer:
+        frontend.close()
+      require editor.handleKey("i")
+      require editor.handleTextInput("alpha beta\nalpha beta")
+      require editor.handleKey("Esc")
+      target.refresh()
+      let other = frontend.splitSearchEditor()
+      if not sameBuffer:
+        require frontend.newEditorTab()
+        require editor.handleKey("i")
+        require editor.handleTextInput("alpha beta\nseparate alpha beta")
+        require editor.handleKey("Esc")
+      other.refresh()
+      require window.clickAt(target.pointToWindow(initPoint(32, 32)))
+      require window.pressSearchKey(keyF, modifiers)
+      window.typeSearchText("alpha")
+      target.refresh()
+      let
+        targetCursor = editor.cursor()
+        targetHighlight =
+          target.cellAt(targetCursor.row, targetCursor.column).backgroundColor
+      require target.cellAt(targetCursor.row, targetCursor.column).text == "a"
+      require window.clickAt(other.pointToWindow(initPoint(32, 32)))
+      require window.pressSearchKey(keyF, modifiers)
+      window.typeSearchText("beta")
+      other.refresh()
+      let
+        otherCursor = editor.cursor()
+        otherHighlight =
+          other.cellAt(otherCursor.row, otherCursor.column).backgroundColor
+      require other.cellAt(otherCursor.row, otherCursor.column).text == "b"
+      for _ in 0 ..< 3:
+        target.refresh()
+        check editor.searchQuery() == "alpha"
+        check target.cellAt(targetCursor.row, targetCursor.column).backgroundColor ==
+          targetHighlight
+        other.refresh()
+        check editor.searchQuery() == "beta"
+        check other.cellAt(otherCursor.row, otherCursor.column).backgroundColor ==
+          otherHighlight
+      target.dismissSearch()
+      other.refresh()
+      check not target.searchVisible()
+      check other.searchVisible()
+      check other.searchField().text() == "beta"
+      check editor.searchQuery() == "beta"
+      check other.cellAt(otherCursor.row, otherCursor.column).backgroundColor ==
+        otherHighlight
+
   for reversed in [false, true]:
     test "copy Find paste replaces the editor selection when reversed=" & $reversed:
       let
