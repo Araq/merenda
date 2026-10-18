@@ -1466,12 +1466,12 @@ proc showSearch*(view: KosmoEditorView, replacing = false): bool {.discardable.}
     view.searchBar.hasMatches = false
     view.searchBar.errorMessage = ""
     view.searchBar.hidden = false
-    view.setNeedsLayout()
-    view.layoutSubtreeIfNeeded()
   else:
     view.searchBar.queryField().selectedRange =
       nimkit.initTextRange(0, view.searchBar.query().runeLen)
   view.searchBar.replacementVisible = replacing
+  view.setNeedsLayout()
+  view.layoutSubtreeIfNeeded()
   result = nimkit.Window(owner).makeFirstResponder(view.searchBar.queryField())
 
 func searchField*(view: KosmoEditorView): nimkit.TextField =

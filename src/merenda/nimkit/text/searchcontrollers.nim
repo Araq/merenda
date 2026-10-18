@@ -109,6 +109,13 @@ proc layoutSearch(search: TextSearchController) {.slot.} =
   if not search.host.isNil:
     search.bar.layoutInBounds(search.host[].bounds())
 
+proc searchMetricsChanged(
+    search: TextSearchController, reason: LayoutInvalidationReason
+) {.slot.} =
+  if reason in
+      {lirIntrinsic, lirDescendantIntrinsic, lirAppearanceMetrics, lirContainerMetrics}:
+    search.layoutSearch()
+
 proc showSearch*(
     search: TextSearchController, replacing = false
 ): bool {.discardable.} =
@@ -219,6 +226,7 @@ proc newTextSearchController*(
     )
   host.addSubview(result.bar)
   host.connect(geometryDidChange, result, layoutSearch)
+  result.bar.connect(layoutInputChanged, result, searchMetricsChanged)
 
 func searchMatchCount*(search: TextSearchController): int =
   search.matches.len
@@ -234,6 +242,7 @@ proc close*(search: TextSearchController) =
     search.adapter.clear()
   if not search.host.isNil:
     search.host[].disconnect(geometryDidChange, search, layoutSearch)
+  search.bar.disconnect(layoutInputChanged, search, searchMetricsChanged)
   search.bar.close()
   search.adapter = TextSearchAdapter()
   search.host = default(WeakRef[View])

@@ -737,7 +737,7 @@ suite "Kosmo file replacement":
     view.refresh()
     for expanded in [false, true]:
       require view.showSearch(replacing = expanded)
-      let box = view.searchField().superview().superview()
+      let box = view.searchField().containingSearchBar()
       let frame = box.rectToWindow(box.bounds)
       var blurCount = 0
       for node in window.buildRenders()[DefaultDrawLevel].resolvedNodes():

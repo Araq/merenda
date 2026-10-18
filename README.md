@@ -454,6 +454,12 @@ template. The adapter owns edits, undo, and checking that source content is curr
 Hosts can route find shortcuts through `search.handleSearchKey(event)` and call
 `search.refreshSearch()` when their source changes.
 
+`SearchBar` is a regular `Box` containing standard text fields and buttons, arranged
+with `StackView`. For embedded controls, add `newSearchBar(frame = ...)` to a
+container (or use layout constraints) and set `hidden = false`. The host chooses
+whether it floats; query, error, and replacement changes do not override an
+embedded frame.
+
 ## Kosmo
 
 Kosmo is a code editor built with Merenda and Moe's Vim-style editing engine.

@@ -11,6 +11,13 @@ proc buttonWithLabel*(view: View, label: string): Button =
     if not button.isNil:
       return button
 
+proc containingSearchBar*(view: View): SearchBar =
+  var ancestor = view
+  while not ancestor.isNil:
+    if ancestor of SearchBar:
+      return SearchBar(ancestor)
+    ancestor = ancestor.superview()
+
 proc expandMarkdownHeadings*(view: MarkdownView) =
   ## Expose full fixture content when a test exercises descriptions or code blocks.
   require view.waitForMarkdownParsing()

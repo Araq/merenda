@@ -100,7 +100,7 @@ suite "Kosmo editor search":
     check window.firstResponder() == replaceAll
 
     let cursor = editor.bufferCursor()
-    let panel = view.searchField().superview().superview()
+    let panel = view.searchField().containingSearchBar()
     let paddingPoint = panel.pointToWindow(initPoint(2, 2))
     require window.mouseDownAt(paddingPoint)
     require window.mouseUpAt(paddingPoint)
@@ -312,6 +312,7 @@ suite "Kosmo editor search":
     )
     require window.mouseDownAt(point)
     require window.mouseUpAt(point)
+    discard window.buildRenders()
     view.replacementField().checkVisibleIn(view)
     check view.searchField().text() == "cat"
     check editor.bufferCursor() == cursor
@@ -338,6 +339,7 @@ suite "Kosmo editor search":
     check view.searchField().text() == "cat"
     require window.mouseDownAt(point)
     require window.mouseUpAt(point)
+    discard window.buildRenders()
     check view.replacementField().hidden
     check window.fieldEditorClient() == view.searchField()
     require window.makeFirstResponder(view)

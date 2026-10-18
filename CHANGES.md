@@ -4,6 +4,10 @@
 
 ## 0.27.6
 
+- Compose reusable search bars with standard Box and StackView layout. Let hosts
+  choose floating or embedded placement, measure expanded and error states from
+  their content, and keep floating bars within narrow panes.
+
 - Keep Git diff document navigation out of focused search controls, so Tab and
   arrow keys preserve query focus and caret movement after pasting.
 
