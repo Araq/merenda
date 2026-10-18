@@ -4,6 +4,9 @@
 
 ## 0.27.6
 
+- Resolve internal layout anchors after manual containers resize their content,
+  keeping nested widgets in the same layout pass without repeated global layout.
+
 - Compose reusable search bars with standard Box and StackView layout. Let hosts
   choose floating or embedded placement, measure expanded and error states from
   their content, and keep floating bars within narrow panes.
