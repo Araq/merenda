@@ -10,8 +10,8 @@ requires "msgpack4nim"
 requires "chronicles >= 0.4"
 requires "chroniclers >= 0.6"
 requires "crunchy >= 0.1.11"
-# Merged platform ABI fixes and X11 helpers: https://github.com/levovix0/siwin/pull/58
-requires "gh:levovix0/siwin#78bb49c7fd7e5e14590f567e1ccbb07eb5ab6739"
+# Includes merged ABI/X11 fixes and opt-in nonactivating window presentation.
+requires "gh:elcritch/siwin#50a96efcd5a3feb5fcfdf07a46baa7da50360c0b"
 requires "gh:elcritch/figdraw >= 0.44.0 [siwin, harfbuzz]"
 requires "sigils >= 0.31.0 [sigNameAsString, closures, siwin, chronos]"
 requires "gh:elcritch/variant#fix/ic-type-ids"
