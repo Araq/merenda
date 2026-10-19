@@ -89,7 +89,8 @@ proc startDevServer*(path: string, handler: DevHandler): DevServer =
       raise newException(
         OSError, "Socket directory must be owned by this user with mode 0700"
       )
-    let socket = newSocket(AF_UNIX, SOCK_STREAM, cast[Protocol](0), buffered = false)
+    let socket =
+      newSocket(AF_UNIX, SOCK_STREAM, nativesockets.IPPROTO_NONE, buffered = false)
     var bound = false
     try:
       socket.bindUnix(path)
@@ -218,7 +219,8 @@ proc sendDevRequest*(path: string, request: DevRequest, timeoutMs = 15000): Json
     validateSocketPath(path)
     if timeoutMs <= 0:
       raise newException(ValueError, "Timeout must be positive")
-    let socket = newSocket(AF_UNIX, SOCK_STREAM, cast[Protocol](0), buffered = false)
+    let socket =
+      newSocket(AF_UNIX, SOCK_STREAM, nativesockets.IPPROTO_NONE, buffered = false)
     defer:
       socket.close()
     socket.getFd().setBlocking(false)

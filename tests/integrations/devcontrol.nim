@@ -185,9 +185,8 @@ when defined(merendaDevControl) and defined(posix):
             id: "escape", command: dcKey, window: second, action: "down", key: "escape"
           ),
         )
-        let stop = newSocket(
-          AF_UNIX, SOCK_STREAM, cast[nativesockets.Protocol](0), buffered = false
-        )
+        let stop =
+          newSocket(AF_UNIX, SOCK_STREAM, nativesockets.IPPROTO_NONE, buffered = false)
         stop.connectUnix(path)
         stop.send(
           $DevRequest(
@@ -246,9 +245,8 @@ when defined(merendaDevControl) and defined(posix):
       )
       defer:
         server.close()
-      let client = newSocket(
-        AF_UNIX, SOCK_STREAM, cast[nativesockets.Protocol](0), buffered = false
-      )
+      let client =
+        newSocket(AF_UNIX, SOCK_STREAM, nativesockets.IPPROTO_NONE, buffered = false)
       defer:
         client.close()
       client.connectUnix(path)
@@ -292,9 +290,8 @@ when defined(merendaDevControl) and defined(posix):
       defer:
         server.close()
       for index in 0 ..< 8:
-        let client = newSocket(
-          AF_UNIX, SOCK_STREAM, cast[nativesockets.Protocol](0), buffered = false
-        )
+        let client =
+          newSocket(AF_UNIX, SOCK_STREAM, nativesockets.IPPROTO_NONE, buffered = false)
         client.connectUnix(path)
         client.send($DevRequest(id: $index, command: dcInfo).requestJson() & "\n")
         let deadline = getMonoTime() + initDuration(seconds = 2)
