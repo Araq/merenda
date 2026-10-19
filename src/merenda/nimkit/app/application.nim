@@ -31,7 +31,7 @@ import ./settings
 import ./workspaces
 import ../app/windows
 
-when defined(merendaDevControl):
+when defined(merenda.devControl):
   import ./devcontrol
   export DevControlOptions
 
@@ -113,7 +113,7 @@ type
     xMerendaSettingsAutoSaveDefaults: bool
     xMerendaSettingsDefaults: MerendaSettings
     xHasMerendaSettingsDefaults: bool
-    when defined(merendaDevControl):
+    when defined(merenda.devControl):
       xDevController: DevController
 
 const WindowDidOrderFrontSelector = "_nimkitWindowDidOrderFront"
@@ -290,7 +290,7 @@ proc installApplicationForwarding(app: Application) =
   )
 
 proc newApplication*(applicationName = ""): Application =
-  when defined(merendaDevControl):
+  when defined(merenda.devControl):
     # Configure presentation before menus, workspaces or native globals initialize.
     if nimkitBackend.backgroundLaunchRequested():
       putEnv("SIWIN_NO_ACTIVATE", "1")
@@ -1340,14 +1340,14 @@ proc windowBlockedByModal*(app: Application, window: Window): bool =
   of msmWindowModal:
     window == session.parentWindow
 
-when defined(merendaDevControl):
+when defined(merenda.devControl):
   proc stopDevControl*(app: Application) =
     ## Closes the development socket and pending client connections.
     app.xDevController.close()
     app.xDevController = nil
 
   proc startDevControl*(app: Application, options = DevControlOptions()) =
-    ## Starts explicit local development control; requires -d:merendaDevControl.
+    ## Starts explicit local development control; requires -d:merenda.devControl.
     if not app.xDevController.isNil:
       raise newException(ValueError, "Development control is already running")
     app.xDevController = newDevController(
@@ -1373,7 +1373,7 @@ proc runApplicationFrame(app: Application): int =
   if hasLocalSigilThread():
     discard getCurrentSigilThread().pollAll(NonBlocking)
   discard drainMainThreadWork()
-  when defined(merendaDevControl):
+  when defined(merenda.devControl):
     app.xDevController.poll()
   let now = getMonoTime()
   discard app.drainAnimationsAt(now)
@@ -1408,7 +1408,7 @@ proc runApplicationFrame(app: Application): int =
     app.syncMainMenuPresentation()
 
 proc prepareApplicationEventLoop(app: Application) =
-  when defined(merendaDevControl):
+  when defined(merenda.devControl):
     if app.xDevController.isNil and
         (getEnv("MERENDA_DEV_CONTROL") == "1" or getEnv("MERENDA_DEV_SOCKET").len > 0):
       app.startDevControl(DevControlOptions(socketPath: getEnv("MERENDA_DEV_SOCKET")))
@@ -1438,7 +1438,7 @@ proc nextApplicationWait(app: Application): Duration =
       max(deadline.get() - now, initDuration())
     else:
       Duration.high
-  when defined(merendaDevControl):
+  when defined(merenda.devControl):
     if not app.xDevController.isNil:
       result = min(result, initDuration(milliseconds = 20))
 
@@ -1509,7 +1509,7 @@ proc run*(app: Application) =
       app.xThreadRenderer = nil
       app.xRunning = false
       app.stopAnimationClock()
-      when defined(merendaDevControl):
+      when defined(merenda.devControl):
         app.stopDevControl()
 
 proc stop*(app: Application) =

@@ -168,7 +168,7 @@ type
     xThreadRenderer: ThreadRendererClient
     xThreadHost: ThreadHostClient
     xDeferredNativeRender: bool
-    when defined(merendaDevControl):
+    when defined(merenda.devControl):
       xDevCapture: proc(capture: RenderCapture) {.closure.}
       xDevCaptureSubmitted: bool
       xDevCaptureId: uint64
@@ -361,7 +361,7 @@ proc resolvedPopupPresentation*(
 ): PopupPresentation
 
 proc supportsNativePopupWindows*(window: Window): bool
-when defined(merendaDevControl):
+when defined(merenda.devControl):
   proc completeDevCapture(window: Window, capture: RenderCapture)
 
 proc close*(window: Window)
@@ -2106,7 +2106,7 @@ proc close*(window: Window) =
       window.xDelegate.trySendLocal(windowShouldClose(), window).get(true)
   if not shouldClose:
     return
-  when defined(merendaDevControl):
+  when defined(merenda.devControl):
     if not window.isNil:
       window.completeDevCapture(
         RenderCapture(id: window.xDevCaptureId, error: "Window closed during capture")
@@ -2586,7 +2586,7 @@ proc syncNativeGeometry(window: Window): Size =
       window.xContentView.frame = rect(0.0, 0.0, result.width, result.height)
     discard window.saveFrameUsingName()
 
-when defined(merendaDevControl):
+when defined(merenda.devControl):
   proc requestScreenshot*(
       window: Window, complete: proc(capture: RenderCapture) {.closure.}
   ): bool =
@@ -2635,11 +2635,11 @@ proc renderNativeWindow*(window: Window) =
   if window.xThreadHost.isNil:
     let renderScene = window.buildRenderScene()
     let needsFollowUpRender = window.needsDisplayUpdate()
-    when defined(merendaDevControl):
+    when defined(merenda.devControl):
       if not window.xDevCapture.isNil:
         window.xHostWindow.requestFrameCapture(window.xDevCaptureId)
     window.xHostWindow.render(renderScene, logicalSize)
-    when defined(merendaDevControl):
+    when defined(merenda.devControl):
       if not window.xDevCapture.isNil:
         window.completeDevCapture(window.xHostWindow.takeCapturedFrame())
     renderScene.acknowledgeRenderGeneration(renderScene.frameGeneration())
@@ -2648,7 +2648,7 @@ proc renderNativeWindow*(window: Window) =
   else:
     let renderScene = window.buildRenderScene()
     let needsFollowUpRender = window.needsDisplayUpdate()
-    when defined(merendaDevControl):
+    when defined(merenda.devControl):
       if not window.xDevCapture.isNil and not window.xDevCaptureSubmitted:
         window.xThreadHost.requestFrameCapture(window.xDevCaptureId)
         window.xDevCaptureSubmitted = true
@@ -3310,7 +3310,7 @@ proc dispatchHostFocusChanged*(window: Window, focused: bool) =
 proc markHostClosed(window: Window) =
   if window.xClosed:
     return
-  when defined(merendaDevControl):
+  when defined(merenda.devControl):
     if not window.isNil:
       window.completeDevCapture(
         RenderCapture(id: window.xDevCaptureId, error: "Window closed during capture")
@@ -3434,12 +3434,12 @@ proc drainThreadHostEvents(window: Window): int =
     of theRendered:
       window.xThreadHost.acknowledgeRender(event.renderId)
       window.xThreadHost.renderCount = event.renderCount
-      when defined(merendaDevControl):
+      when defined(merenda.devControl):
         if event.capture.png.len > 0 or event.capture.error.len > 0:
           window.completeDevCapture(event.capture)
     of theRenderUpdateRejected:
       window.xThreadHost.rejectRenderUpdate(event.renderId)
-      when defined(merendaDevControl):
+      when defined(merenda.devControl):
         if window.xDevCaptureSubmitted:
           window.completeDevCapture(
             RenderCapture(

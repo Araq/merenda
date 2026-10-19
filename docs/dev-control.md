@@ -1,11 +1,11 @@
 # Development control
 
-Build any Merenda application with `-d:merendaDevControl` to include an optional
+Build any Merenda application with `-d:merenda.devControl` to include an optional
 local automation endpoint. Production builds omit the listener, dispatch adapter
 and capture queues. The environment cannot enable an uninstrumented build.
 
 ```sh
-nim ic -d:merendaDevControl examples/controls_showcase.nim
+nim ic -d:merenda.devControl examples/controls_showcase.nim
 nim ic -o:deps/merenda-dev tools/merenda_dev.nim
 MERENDA_DEV_CONTROL=1 MERENDA_BACKGROUND=1 ./examples/controls_showcase &
 app_pid=$!

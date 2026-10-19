@@ -1,4 +1,4 @@
-when defined(merendaDevControl) and defined(posix):
+when defined(merenda.devControl) and defined(posix):
   import
     std/[
       base64, json, monotimes, net, nativesockets, os, osproc, tempfiles, times,

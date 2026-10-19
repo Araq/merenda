@@ -838,7 +838,7 @@ These are good places to go once you've tried the basics:
   [Siwin](https://github.com/levovix0/siwin), and
   [Sigils](https://github.com/elcritch/sigils).
 
-Compile with `-d:merendaDevControl` for optional local screenshots and input
+Compile with `-d:merenda.devControl` for optional local screenshots and input
 automation. `MERENDA_BACKGROUND=1` supports automated runs without activating the
 app on macOS. See [development control](docs/dev-control.md) for the PID/socket
 CLI and protocol.

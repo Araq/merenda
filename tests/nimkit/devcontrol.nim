@@ -48,7 +48,7 @@ suite "Development control protocol":
     check success["ok"].getBool()
     check not success["result"]["handled"].getBool()
 
-when defined(merendaDevControl):
+when defined(merenda.devControl):
   import merenda/nimkit/app/backend
 
   suite "Development capture delivery":

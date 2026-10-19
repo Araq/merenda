@@ -1,8 +1,8 @@
 ## GUI-thread adapter for the optional development-control protocol.
-when not defined(merendaDevControl):
+when not defined(merenda.devControl):
   {.
     error:
-      "Compile applications with -d:merendaDevControl to enable development control"
+      "Compile applications with -d:merenda.devControl to enable development control"
   .}
 
 import std/[base64, json, monotimes, os, strutils, times]

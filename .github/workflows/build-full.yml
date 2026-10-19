@@ -166,7 +166,7 @@ jobs:
       run: |
         if [[ "$RUNNER_OS" == "macOS" ]]; then
           atlas-run tests --compile-only --compiler-output tintegrations.nim \
-            -- -d:merendaDevControl
+            -- -d:merenda.devControl
         else
           atlas-run tests --compile-only --compiler-output tintegrations.nim \
             $ATLAS_TEST_NIM_ARGS

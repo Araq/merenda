@@ -1,5 +1,5 @@
 ## Runs before the shared integration suites in a child process.
-when defined(merendaDevControl) and defined(posix):
+when defined(merenda.devControl) and defined(posix):
   import std/os
   import merenda/nimkit
   import merenda/nimkit/app/backend
