@@ -31,6 +31,10 @@ import ./settings
 import ./workspaces
 import ../app/windows
 
+when defined(merendaDevControl):
+  import ./devcontrol
+  export DevControlOptions
+
 type
   SupplementalFontCatalogProvider* = proc(): seq[FontCatalogEntry] {.closure.}
     ## Supplies application-private fonts when Merenda Settings is first opened.
@@ -109,6 +113,8 @@ type
     xMerendaSettingsAutoSaveDefaults: bool
     xMerendaSettingsDefaults: MerendaSettings
     xHasMerendaSettingsDefaults: bool
+    when defined(merendaDevControl):
+      xDevController: DevController
 
 const WindowDidOrderFrontSelector = "_nimkitWindowDidOrderFront"
 const WindowDidOrderBackSelector = "_nimkitWindowDidOrderBack"
@@ -284,6 +290,10 @@ proc installApplicationForwarding(app: Application) =
   )
 
 proc newApplication*(applicationName = ""): Application =
+  when defined(merendaDevControl):
+    # Configure presentation before menus, workspaces or native globals initialize.
+    if nimkitBackend.backgroundLaunchRequested():
+      putEnv("SIWIN_NO_ACTIVATE", "1")
   result = Application(
     xApplicationName: resolvedApplicationName(applicationName),
     xWorkspace: nimkitBackend.newNativeWorkspace(),
@@ -1330,6 +1340,24 @@ proc windowBlockedByModal*(app: Application, window: Window): bool =
   of msmWindowModal:
     window == session.parentWindow
 
+when defined(merendaDevControl):
+  proc stopDevControl*(app: Application) =
+    ## Closes the development socket and pending client connections.
+    app.xDevController.close()
+    app.xDevController = nil
+
+  proc startDevControl*(app: Application, options = DevControlOptions()) =
+    ## Starts explicit local development control; requires -d:merendaDevControl.
+    if not app.xDevController.isNil:
+      raise newException(ValueError, "Development control is already running")
+    app.xDevController = newDevController(
+      options,
+      proc(): seq[Window] =
+        app.xWindows,
+      proc(window: Window): bool =
+        app.windowBlockedByModal(window),
+    )
+
 proc runApplicationFrame(app: Application): int =
   checkNativeEventLoop()
   recordTerminalTrace("application-frame-start")
@@ -1345,6 +1373,8 @@ proc runApplicationFrame(app: Application): int =
   if hasLocalSigilThread():
     discard getCurrentSigilThread().pollAll(NonBlocking)
   discard drainMainThreadWork()
+  when defined(merendaDevControl):
+    app.xDevController.poll()
   let now = getMonoTime()
   discard app.drainAnimationsAt(now)
   var
@@ -1378,6 +1408,10 @@ proc runApplicationFrame(app: Application): int =
     app.syncMainMenuPresentation()
 
 proc prepareApplicationEventLoop(app: Application) =
+  when defined(merendaDevControl):
+    if app.xDevController.isNil and
+        (getEnv("MERENDA_DEV_CONTROL") == "1" or getEnv("MERENDA_DEV_SOCKET").len > 0):
+      app.startDevControl(DevControlOptions(socketPath: getEnv("MERENDA_DEV_SOCKET")))
   if app.xAutomaticallyStartsLocalSigilThread and not hasLocalSigilThread():
     startLocalThreadDefault()
 
@@ -1399,10 +1433,14 @@ proc nextApplicationWait(app: Application): Duration =
   let
     now = getMonoTime()
     deadline = app.nextAnimationDeadline(now)
-  if deadline.isSome:
-    max(deadline.get() - now, initDuration())
-  else:
-    Duration.high
+  result =
+    if deadline.isSome:
+      max(deadline.get() - now, initDuration())
+    else:
+      Duration.high
+  when defined(merendaDevControl):
+    if not app.xDevController.isNil:
+      result = min(result, initDuration(milliseconds = 20))
 
 proc pumpNativeApplication(app: Application): Duration =
   discard app.runApplicationFrame()
@@ -1471,6 +1509,8 @@ proc run*(app: Application) =
       app.xThreadRenderer = nil
       app.xRunning = false
       app.stopAnimationClock()
+      when defined(merendaDevControl):
+        app.stopDevControl()
 
 proc stop*(app: Application) =
   app.xRunning = false

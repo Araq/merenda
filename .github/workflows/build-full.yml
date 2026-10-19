@@ -164,8 +164,13 @@ jobs:
 
     - name: Compile integration tests
       run: |
-        atlas-run tests --compile-only --compiler-output tintegrations.nim \
-          $ATLAS_TEST_NIM_ARGS
+        if [[ "$RUNNER_OS" == "macOS" ]]; then
+          atlas-run tests --compile-only --compiler-output tintegrations.nim \
+            -- -d:merendaDevControl
+        else
+          atlas-run tests --compile-only --compiler-output tintegrations.nim \
+            $ATLAS_TEST_NIM_ARGS
+        fi
 
     - name: Run integration tests
       timeout-minutes: 5

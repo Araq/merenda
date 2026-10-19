@@ -168,6 +168,10 @@ type
     xThreadRenderer: ThreadRendererClient
     xThreadHost: ThreadHostClient
     xDeferredNativeRender: bool
+    when defined(merendaDevControl):
+      xDevCapture: proc(capture: RenderCapture) {.closure.}
+      xDevCaptureSubmitted: bool
+      xDevCaptureId: uint64
     xAnimationScheduler: AnimationScheduler
     xAnimationClock: AnimationSchedulerClock
     xInsertionPointBlinkAnimation: Animation
@@ -357,6 +361,9 @@ proc resolvedPopupPresentation*(
 ): PopupPresentation
 
 proc supportsNativePopupWindows*(window: Window): bool
+when defined(merendaDevControl):
+  proc completeDevCapture(window: Window, capture: RenderCapture)
+
 proc close*(window: Window)
 proc releaseThreadRenderer(window: Window)
 proc setKeyWindow*(window: Window, value: bool)
@@ -2099,6 +2106,11 @@ proc close*(window: Window) =
       window.xDelegate.trySendLocal(windowShouldClose(), window).get(true)
   if not shouldClose:
     return
+  when defined(merendaDevControl):
+    if not window.isNil:
+      window.completeDevCapture(
+        RenderCapture(id: window.xDevCaptureId, error: "Window closed during capture")
+      )
   window.sendWindowDelegate(windowWillClose(), window)
   emit window.willClose()
   window.postWindowNotification(nkWindowWillClose)
@@ -2574,6 +2586,38 @@ proc syncNativeGeometry(window: Window): Size =
       window.xContentView.frame = rect(0.0, 0.0, result.width, result.height)
     discard window.saveFrameUsingName()
 
+when defined(merendaDevControl):
+  proc requestScreenshot*(
+      window: Window, complete: proc(capture: RenderCapture) {.closure.}
+  ): bool =
+    ## Requests a fresh rendered frame without showing or focusing the window.
+    ## False means another capture is pending or the native surface is unavailable.
+    if window.isNil or not window.nativeReady or not window.isVisible or window.isClosed or
+        not window.xDevCapture.isNil:
+      return
+    inc window.xDevCaptureId
+    window.xDevCapture = complete
+    window.xDevCaptureSubmitted = false
+    window.requestNativeDisplayUpdate()
+    true
+
+  proc cancelScreenshot*(window: Window) =
+    ## Cancels a pending development capture without accepting stale render results.
+    window.xDevCapture = nil
+    window.xDevCaptureSubmitted = false
+    inc window.xDevCaptureId
+
+  proc completeDevCapture(window: Window, capture: RenderCapture) =
+    if window.xDevCapture.isNil or capture.id != window.xDevCaptureId:
+      return
+    let complete = move window.xDevCapture
+    window.xDevCaptureSubmitted = false
+    complete(capture)
+
+  proc auxiliaryWindows*(window: Window): seq[Window] =
+    ## Includes popup hosts so development clients can inspect their render surfaces.
+    window.xAuxiliaryWindows
+
 proc renderNativeWindow*(window: Window) =
   if not window.nativeReady:
     return
@@ -2591,13 +2635,23 @@ proc renderNativeWindow*(window: Window) =
   if window.xThreadHost.isNil:
     let renderScene = window.buildRenderScene()
     let needsFollowUpRender = window.needsDisplayUpdate()
+    when defined(merendaDevControl):
+      if not window.xDevCapture.isNil:
+        window.xHostWindow.requestFrameCapture(window.xDevCaptureId)
     window.xHostWindow.render(renderScene, logicalSize)
+    when defined(merendaDevControl):
+      if not window.xDevCapture.isNil:
+        window.completeDevCapture(window.xHostWindow.takeCapturedFrame())
     renderScene.acknowledgeRenderGeneration(renderScene.frameGeneration())
     if needsFollowUpRender:
       window.requestNativeDisplayUpdate()
   else:
     let renderScene = window.buildRenderScene()
     let needsFollowUpRender = window.needsDisplayUpdate()
+    when defined(merendaDevControl):
+      if not window.xDevCapture.isNil and not window.xDevCaptureSubmitted:
+        window.xThreadHost.requestFrameCapture(window.xDevCaptureId)
+        window.xDevCaptureSubmitted = true
     discard window.xThreadHost.submitRenderScene(renderScene, logicalSize)
     window.xHostWindow.renderSubmitted()
     if needsFollowUpRender:
@@ -3256,6 +3310,11 @@ proc dispatchHostFocusChanged*(window: Window, focused: bool) =
 proc markHostClosed(window: Window) =
   if window.xClosed:
     return
+  when defined(merendaDevControl):
+    if not window.isNil:
+      window.completeDevCapture(
+        RenderCapture(id: window.xDevCaptureId, error: "Window closed during capture")
+      )
   window.sendWindowDelegate(windowWillClose(), window)
   emit window.willClose()
   window.postWindowNotification(nkWindowWillClose)
@@ -3375,8 +3434,18 @@ proc drainThreadHostEvents(window: Window): int =
     of theRendered:
       window.xThreadHost.acknowledgeRender(event.renderId)
       window.xThreadHost.renderCount = event.renderCount
+      when defined(merendaDevControl):
+        if event.capture.png.len > 0 or event.capture.error.len > 0:
+          window.completeDevCapture(event.capture)
     of theRenderUpdateRejected:
       window.xThreadHost.rejectRenderUpdate(event.renderId)
+      when defined(merendaDevControl):
+        if window.xDevCaptureSubmitted:
+          window.completeDevCapture(
+            RenderCapture(
+              id: window.xDevCaptureId, error: "Render target changed during capture"
+            )
+          )
       window.requestNativeDisplayUpdate()
     of theRenderTargetReleased:
       window.xThreadHost.clearRenderResources()

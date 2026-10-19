@@ -1,3 +1,11 @@
+## Unreleased
+
+- Add opt-in `-d:merendaDevControl` automation with explicit PID/socket addressing,
+  renderer PNG screenshots, window inspection, pointer/key/text input, and a small
+  CLI suitable for future MCP adapters.
+- Add `MERENDA_BACKGROUND=1` nonactivating development presentation on macOS and
+  Windows through a pinned Siwin update.
+
 # Changes
 
 ## Unreleased

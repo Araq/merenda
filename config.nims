@@ -141,3 +141,6 @@ task install_kosmo, "build and install the local macOS Kosmo.app":
 
 when defined(nimkitTerminalTrace):
   switch("define", "terminexTrace")
+
+when defined(merendaDevControl):
+  switch("define", "figdraw.vulkanReadback=on")
