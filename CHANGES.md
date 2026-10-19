@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Match split divider fills, edges, and grips to each bundled theme's palette,
+  including the dark Nebula, Peachy, and Synthwave83 themes.
+
+- Tone down Aqua status labels with muted sage-gray surfaces, quieter shadows,
+  and darker text.
+
+- Give thin SplitView dividers an 8-pixel grab area, including macOS and macOS
+  Dark, so dragging near either pane edge resizes the split reliably.
+
+- Support CSS variable fallbacks such as `var(--accent, royalblue)`, including
+  nested fallbacks, composite values, and empty substitutions. Revalidate them
+  when root variables change while retaining cycle and expansion limits.
+
 - Run Kosmo's GitHub CLI through the user's login shell on macOS and Linux, so
   apps opened from the desktop can find `gh` installed through shell profiles.
   Preserve the project directory and noninteractive GitHub settings after startup.
