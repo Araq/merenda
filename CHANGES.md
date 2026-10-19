@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Tone down Aqua status labels with muted sage-gray surfaces, quieter shadows,
+  and darker text.
+
 - Give thin SplitView dividers an 8-pixel grab area, including macOS and macOS
   Dark, so dragging near either pane edge resizes the split reliably.
 
