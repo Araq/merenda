@@ -41,6 +41,9 @@ constructors and `NIMKIT_THEME` names remain available. Stylesheets are embedded
 in the executable, compiled once per thread, and cached until font settings or
 registered native theme extensions change.
 
+After editing bundled stylesheets, use `--forceBuild:on` with `nim ic` to refresh
+the embedded CSS.
+
 The [CSS demo](../examples/css_theme_demo.nim) loads a
 [sidecar stylesheet](../examples/css_theme_demo.css). Edit it and click **Reload
 CSS** to rebuild the window's appearance. Reloading is explicit; no watcher runs
@@ -206,6 +209,9 @@ SplitView's `-nimkit-separator-thickness` controls the visible divider and pane
 spacing. Thin dividers have a grab area of at least eight logical pixels, centered
 on the divider and clipped to the split view's bounds. The resize cursor region
 uses the same area, including with the one-pixel macOS and macOS Dark dividers.
+Bundled themes expose `--split-view-divider-fill`,
+`--split-view-divider-border-color`, and `--split-view-divider-mark-color` for
+the divider surface, edge, and grip. Both orientations use the same palette.
 
 ## Edge pinning and constraints
 

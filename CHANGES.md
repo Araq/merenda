@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Match split divider fills, edges, and grips to each bundled theme's palette,
+  including the dark Nebula, Peachy, and Synthwave83 themes.
+
 - Tone down Aqua status labels with muted sage-gray surfaces, quieter shadows,
   and darker text.
 
