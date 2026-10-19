@@ -288,6 +288,118 @@ suite "NimKit CSS themes":
       check parsed.theme.resolveButtonStyle(controlStyle(srButton)).box.fill ==
         parseHtmlColor("red")
 
+  test "variable fallbacks supply missing values and revalidate after root edits":
+    let first = cleanTheme(
+      """
+      button {
+        color: var(--optional-color, var(--other-color, #123456));
+        padding: var(--optional-padding, 2px 4px);
+        background: var(--optional-fill, linear-gradient(to right, red, blue));
+      }
+    """
+    )
+    let style = first.resolveButtonStyle(controlStyle(srButton))
+    check style.text.color == parseHtmlColor("#123456")
+    check style.text.insets == insets(2, 4, 2, 4)
+    check style.box.fill == linear(parseHtmlColor("red"), parseHtmlColor("blue"), fgaX)
+    let changed = cleanTheme(
+      ":root { --optional-color: lime; --optional-padding: 7px; --optional-fill: black; }",
+      first,
+    )
+    let resolved = changed.resolveButtonStyle(controlStyle(srButton))
+    check resolved.text.color == parseHtmlColor("lime")
+    check resolved.text.insets == insets(7)
+    check resolved.box.fill == parseHtmlColor("black")
+    check first.textColor() == parseHtmlColor("#123456")
+
+  test "fallbacks preserve commas empty substitutions and missing aliases":
+    let theme = cleanTheme(
+      """
+      :root { --optional-alias: var(--absent-alias); --gap: var(--absent-gap, 5px); }
+      button {
+        color: var(--optional-alias, rgba(10, 20, 30, 0.5));
+        padding: 1px var(--absent-padding,) var(--gap);
+        box-shadow: var(--absent-shadow, 0 1px 2px red, inset 0 2px 3px blue);
+      }
+    """
+    )
+    let style = theme.resolveButtonStyle(controlStyle(srButton))
+    check style.text.color == color(10.0 / 255, 20.0 / 255, 30.0 / 255, 0.5)
+    check style.text.insets == insets(1, 5, 1, 5)
+    check style.box.shadows.len == 2
+    check style.box.shadows[0].color == parseHtmlColor("red")
+    check style.box.shadows[1].kind == bskInset
+    check style.box.shadows[1].color == parseHtmlColor("blue")
+    check theme.lengthToken("--gap", 0) == 5
+
+  test "defined variables ignore fallbacks and wrong types retain lower declarations":
+    let parsed = parseCssTheme(
+      """
+      :root { --present: blue; --wrong: 2px; }
+      button {
+        color: red;
+        color: var(--wrong, lime);
+        background: var(--present, var(--unused));
+      }
+    """
+    )
+    check parsed.diagnostics.len == 1
+    check parsed.theme.textColor() == parseHtmlColor("red")
+    check parsed.theme.resolveButtonStyle(controlStyle(srButton)).box.fill ==
+      parseHtmlColor("blue")
+
+  test "whole variable fallbacks retain exact native resources and colors":
+    let face = initSystemTypeface(getCurrentDir() / "data/Ubuntu.ttf")
+    let shade = color(0.12345, 0.25, 0.6789, 0.5)
+    var builder = initThemeBuilder(initTheme())
+    builder["native.face"] = styleFontFace(face)
+    builder["native.shade"] = shade
+    let theme = cleanTheme(
+      """
+      :root { --face: var(--absent-face, var(--native-face)); }
+      button {
+        -nimkit-font-face: var(--face, none);
+        color: var(--native-shade, red);
+      }
+    """,
+      builder.finish(),
+    )
+    let style = theme.resolveButtonStyle(controlStyle(srButton))
+    check style.text.fontFace == face
+    check style.text.color == shade
+    check theme.styleValue("--face", styleFontFace(SystemTypeface())).fontFace == face
+
+  test "partly expanded missing aliases restore complete fallbacks independently":
+    let theme = cleanTheme(
+      """
+      :root { --broken-padding: 99px var(--missing); }
+      button {
+        padding: var(--broken-padding, 2px) var(--broken-padding, 4px);
+      }
+    """
+    )
+    check theme.resolveButtonStyle(controlStyle(srButton)).text.insets ==
+      insets(2, 4, 2, 4)
+
+  test "malformed cyclic and excessive fallback expansion remains bounded":
+    for expression in [
+      "var(accent, blue)", "var(--, blue)", "var(--missing blue)",
+      "var(--missing, var(--other))", "var(--loop, blue)",
+    ]:
+      checkpoint(expression)
+      let parsed = parseCssTheme(
+        ":root { --loop: var(--loop); } button { color: red; color: " & expression &
+          "; }"
+      )
+      check parsed.diagnostics.len == 1
+      check parsed.theme.textColor() == parseHtmlColor("red")
+    var expression = "blue"
+    for index in 0 .. 16:
+      expression = "var(--missing, " & expression & ")"
+    let deep = parseCssTheme("button { color: red; color: " & expression & "; }")
+    check deep.diagnostics.len == 1
+    check deep.theme.textColor() == parseHtmlColor("red")
+
   test "composite variable failures preserve complete lower declarations and recover":
     let first = parseCssTheme(
       """

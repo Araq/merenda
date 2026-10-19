@@ -202,6 +202,11 @@ height disables them. The renderer increases pitch to at least one logical pixel
 twice the stripe height, and enough to fit at most 4096 bands; it also stops if
 floating-point positions stop advancing.
 
+SplitView's `-nimkit-separator-thickness` controls the visible divider and pane
+spacing. Thin dividers have a grab area of at least eight logical pixels, centered
+on the divider and clipped to the split view's bounds. The resize cursor region
+uses the same area, including with the one-pixel macOS and macOS Dark dividers.
+
 ## Edge pinning and constraints
 
 Style geometry through the native solver:
@@ -355,6 +360,7 @@ button {
   box-shadow: var(--shadow);
 }
 button:hover { box-shadow: 0 2px var(--space) var(--accent); }
+button.secondary { color: var(--secondary-accent, var(--accent, royalblue)); }
 ```
 
 Variables resolve after all root declarations, so forward references work.
@@ -366,9 +372,15 @@ exact font resources. Typed token accessors such as `colorToken`, `lengthToken`
 and `sizeToken` also interpret CSS values using the requested type.
 `var(--space)` converts a single length to uniform padding or corner radii.
 Variables can appear within a supported declaration value, including a gradient
-or shadow. Expansion is bounded to 16 reference steps and 4096 processed tokens.
-Fallback arguments, `calc()`, and variables on ordinary selector rules are
-unsupported. Missing references, cycles, excessive expansion and wrong target
+or shadow. `var(--name, fallback)` supplies a fallback when the reference or an
+alias is missing. Fallbacks can contain nested variables, commas, or multiple
+values, such as `var(--padding, 4px 12px)`; an empty fallback substitutes no tokens.
+A defined value takes precedence over its fallback, even when it has the wrong
+type for the consuming property. Cycles and excessive expansion remain errors,
+including when a fallback is present. Expansion, including fallback traversal,
+is bounded to 16 reference steps and 4096 processed tokens.
+`calc()` and variables on ordinary selector rules are unsupported.
+Missing references without a fallback, cycles, excessive expansion and wrong target
 types produce diagnostics and leave valid lower declarations in force. The variable candidate
 is retained: appending a valid root definition can restore it, and changing a
 variable's type revalidates earlier candidates. The diagnostics for retained
