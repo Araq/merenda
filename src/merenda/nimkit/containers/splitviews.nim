@@ -1,4 +1,4 @@
-import std/[options, strutils]
+import std/strutils
 
 import sigils/core
 
@@ -317,7 +317,7 @@ proc dividerHitRect(splitView: SplitView, divider: Rect): Rect =
     hitThickness,
     divider.size.crossSize(axis),
   )
-  .intersection(splitView.bounds())
+    .intersection(splitView.bounds())
 
 proc dividerAtPoint*(splitView: SplitView, point: Point): int =
   var distance = float32.high
@@ -759,9 +759,7 @@ protocol DefaultSplitViewHitTesting of ViewProtocol:
   method hitTest(splitView: SplitView, point: Point): View =
     if splitView.isHidden():
       return
-    let next = splitView.performNext(hitTest, point)
-    if next.isSome:
-      result = next.get()
+    discard splitView.performNext(hitTest, point, result)
     if splitView.dividerAtPoint(point) >= 0 and (
       result.isNil or
       result.hitTestLevel(result.pointFromView(point, splitView)) <= DefaultDrawLevel.int

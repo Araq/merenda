@@ -269,6 +269,22 @@ suite "nimkit split views":
     splitView.hidden = true
     check splitView.hitTest(initPoint(2, 15)).isNil
 
+  test "split view misses allow hit testing to continue to sibling views":
+    let
+      root = newView(rect(0, 0, 320, 200))
+      sibling = newView(rect(0, 160, 320, 40))
+      splitView = newSplitView(laHorizontal, rect(0, 0, 320, 140))
+      point = initPoint(20, 180)
+    splitView.appearance = splitAppearance(1)
+    splitView.addPane(newView())
+    splitView.addPane(newView())
+    root.addSubview(sibling)
+    root.addSubview(splitView)
+    splitView.layoutSubtreeIfNeeded()
+
+    check splitView.hitTest(point).isNil
+    check root.hitTest(point) == sibling
+
   test "divider grab areas preserve popup hits and choose the nearest divider":
     let
       splitView = newSplitView(laHorizontal, rect(0, 0, 101, 50))
