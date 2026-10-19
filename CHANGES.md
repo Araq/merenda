@@ -1,3 +1,5 @@
+# Changes
+
 ## Unreleased
 
 - Route development control through Sigils JSON-RPC selectors and dispatcher over
@@ -14,9 +16,32 @@
 - Add `MERENDA_BACKGROUND=1` nonactivating development presentation on macOS and
   Windows through a pinned Siwin update.
 
-# Changes
+## 0.28.0
 
-## Unreleased
+- Let locally signed macOS apps load their bundled text libraries. Check startup
+  after signing and through the installed command to catch loader failures.
+  Statically link HarfBuzz and FriBidi when installing with `nim install_kosmo`.
+
+- Build Windows Kosmo releases and examples with MSVC. Use the Windows SDK
+  resource compiler, ship the matching PDB, and keep Nim stack traces with
+  function names and source lines in place of GNU libbacktrace on MSVC.
+  Use Sigils 0.32.0 and a private Nim 2.2.10 compiler built with pinned,
+  checksum-verified fixes for MSVC atomic exchange, compare-and-swap,
+  arithmetic operations, and large ARC/ORC string literals in embedded assets.
+  Invoke MSVC directly from its Developer shell so large linker response files
+  remain within Windows' command-line limit.
+
+- Enable FigDraw's `textBackendHarfbuzzy` Atlas feature in `merenda.nimble` so
+  this checkout and downstream Merenda apps use HarfBuzz text rendering and
+  automatic system-font fallback. Require released FigDraw 0.45.0 and Harfbuzzy
+  0.3.0 for dynamic and static builds. Previously HarfBuzz was installed as a dependency,
+  but FigDraw still selected Pixie, leaving automatic fallback disabled. Missing
+  glyphs in the editor, terminal, and other text views can now use system fonts,
+  including checkbox symbols absent from the bundled Nerd Font. Initialize fallback
+  on background text-layout threads as well as the main thread.
+
+- Render Markdown task lists with ☐ for `[ ]`, ☑ for `[x]` or `[X]`, and ☒ for
+  `[-]`, preserving nested lists, numbering, and inline formatting.
 
 - Match split divider fills, edges, and grips to each bundled theme's palette,
   including the dark Nebula, Peachy, and Synthwave83 themes.

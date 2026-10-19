@@ -10,7 +10,8 @@ jobs:
   tests:
     name: tests (${{ matrix.os }}, ${{ matrix.nimversion }}, ${{ matrix.display }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    # Full GUI and integration coverage can take nearly 40 minutes on macOS.
+    timeout-minutes: 60
     env:
       ATLAS_TEST_NIM_ARGS: ${{ matrix.nimargs }}
     defaults:
@@ -58,6 +59,10 @@ jobs:
     - name: Check shared test runner coverage
       run: nim e --skipParentCfg:on --skipProjCfg:on .github/scripts/check_test_imports.nims
 
+    - name: Install macOS text rendering libraries
+      if: runner.os == 'macOS'
+      run: brew install harfbuzz fribidi
+
     - name: Setup software OpenGL (Mesa)
       if: runner.os == 'Windows'
       uses: ssciwr/setup-mesa-dist-win@v3.0.0
@@ -87,6 +92,8 @@ jobs:
           libgl1-mesa-dev \
           libgles2-mesa-dev \
           libegl1-mesa-dev \
+          libharfbuzz-dev \
+          libfribidi-dev \
           mesa-utils \
           vulkan-tools \
           mesa-vulkan-drivers \
@@ -260,6 +267,8 @@ jobs:
           libgl1-mesa-dev \
           libgles2-mesa-dev \
           libegl1-mesa-dev \
+          libharfbuzz-dev \
+          libfribidi-dev \
           mesa-utils \
           vulkan-tools \
           mesa-vulkan-drivers \
@@ -308,6 +317,30 @@ jobs:
     steps:
     - uses: actions/checkout@v5
 
+    - name: Configure MSVC for x64
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+
+    - name: Install macOS text rendering libraries
+      if: runner.os == 'macOS'
+      run: brew install harfbuzz fribidi
+
+    - name: Install Linux text rendering libraries
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends libharfbuzz-dev libfribidi-dev
+
+    - name: Install Windows text rendering headers
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        & "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install harfbuzz:x64-windows
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        "INCLUDE=$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/include/harfbuzz;$env:INCLUDE" >> $env:GITHUB_ENV
+
     - name: Cache packages
       uses: actions/cache@v4
       with:
@@ -317,9 +350,18 @@ jobs:
     - name: Install latest Atlas and set up Nim
       run: |
         mkdir -p "$HOME/.local/bin"
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          cygpath -w "$HOME/.local/bin" >> "$GITHUB_PATH"
+        else
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        fi
+        export PATH="$HOME/.local/bin:$PATH"
         bash .github/scripts/install-atlas.sh
-        "$HOME/.local/bin/atlas" env "${{ matrix.nimversion }}" --binary --github-path
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          bash .github/scripts/install-msvc-nim.sh
+        else
+          "$HOME/.local/bin/atlas" env "${{ matrix.nimversion }}" --binary --github-path
+        fi
 
     - name: Verify Nim
       run: |
@@ -340,5 +382,13 @@ jobs:
       run: bash .github/scripts/clean_generated_examples.sh
 
     - name: Compile Examples
+      if: runner.os != 'Windows'
       run: |
         atlas-run tests --jobs:2 --compile-only --only-errors "examples/all_compile.nim"
+
+    - name: Compile Windows Examples with MSVC
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        atlas-run tests --jobs:2 --compile-only --only-errors "examples/all_compile.nim" -- --cc:vcc --passC:/MT
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

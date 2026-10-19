@@ -600,6 +600,10 @@ to focus an existing terminal. If none is open, Kosmo opens one in the nearest
 pane to the right, creating a right split when needed. **New Terminal** in the
 File menu still opens an additional terminal in the active pane.
 
+Markdown task lists show ☐ for `- [ ]`, ☑ for `- [x]` (also `[X]`), and ☒ for
+`- [-]`. Text rendering uses system-font fallback for characters missing from
+the selected font, including symbols absent from the bundled Nerd Font.
+
 In Moe's normal mode, `:e path` opens a Kosmo document tab or selects the file's
 existing tab.
 `:help` and `:config` open reusable tabs; `:config` keeps Moe's interactive
@@ -788,6 +792,10 @@ for supported builds, custom install locations, and the static Linux build.
 
 ### Build from source
 
+Install HarfBuzz and FriBidi development libraries for your platform first
+(`brew install harfbuzz fribidi pkg-config` on macOS, or the `libharfbuzz-dev`
+and `libfribidi-dev` packages on Debian/Ubuntu).
+
 From your Merenda checkout, install the extra Kosmo dependencies, then build
 and launch it:
 
@@ -797,18 +805,31 @@ nim c -o:kosmo src/merenda/kosmo/kosmo.nim
 ./kosmo .
 ```
 
-On Windows, run `./kosmo.exe .` after compiling.
+On Windows, open a Visual Studio x64 Developer PowerShell and run
+`bash .github/scripts/install-msvc-nim.sh` using Git for Windows Bash.
+Use the compiler path it prints to build with
+`& "<compiler-path>" c --cc:vcc -o:kosmo.exe src/merenda/kosmo/kosmo.nim`,
+then run `./kosmo.exe .`.
+The script makes a private copy of the official Nim 2.2.10 distribution,
+installs checksum-verified atomic and large-string fixes, and builds the corrected
+compiler once. Worker threads need the atomic fix; an unpatched MSVC build is
+rejected at compile time. The string fix lets ARC/ORC embed the bundled assets.
+Keep the Developer shell open when building: the project invokes `cl.exe`
+directly so large applications can link using response files.
 
 On macOS, install the current checkout as a complete `Kosmo.app` with its icon,
 bundled notices, debug symbols, and local code signature:
 
 ```sh
+brew install cmake meson ninja
 nim install_kosmo
 ```
 
 This uses Atlas to resolve dependencies, replaces `~/Applications/Kosmo.app`,
 and updates the `~/.local/bin/kosmo` link. Restart Kosmo if it was already
 running. Set `KOSMO_INSTALL_DIR` or `KOSMO_BIN_DIR` to choose other locations.
+This build links HarfBuzz and FriBidi statically with `-d:harfbuzzyStatic`,
+so the installed app does not require Homebrew at runtime.
 
 ## Explore more
 
