@@ -25,6 +25,5 @@ import integrations/urlassets
 import integrations/terminalwatch
 import integrations/terminals
 import integrations/resourcelifetimes
-import integrations/backgroundworkershutdown
-
 import integrations/devcontrol
+import integrations/backgroundworkershutdown

@@ -1526,10 +1526,13 @@ when defined(merendaDevControl):
   proc captureFrame(
       renderer: figrender.FigRenderer[siwinshim.SiwinRenderBackend],
       id, renderId: uint64,
+      logicalSize: Size,
   ): RenderCapture =
     result.id = id
     result.renderId = renderId
-    result.scale = renderer.ctx.pixelScale()
+    if logicalSize.width <= 0 or logicalSize.height <= 0:
+      result.error = "Render surface has no logical size"
+      return
     try:
       let image = renderer.takeOneFrameScreenshot()
       if image.isNil or image.width <= 0 or image.height <= 0:
@@ -1539,6 +1542,7 @@ when defined(merendaDevControl):
       else:
         result.width = image.width
         result.height = image.height
+        result.scale = image.width.float32 / logicalSize.width
         result.png = image.encodePng()
     except CatchableError as error:
       result.error = error.msg
@@ -1567,7 +1571,7 @@ proc render*(host: HostWindow, renders: var Renders, logicalSize: Size) =
   when defined(merendaDevControl):
     if host.captureNextFrame != 0:
       host.capturedFrame = captureFrame(
-        host.xRenderer, host.captureNextFrame, host.xRenderCount.uint64 + 1
+        host.xRenderer, host.captureNextFrame, host.xRenderCount.uint64 + 1, logicalSize
       )
       host.captureNextFrame = 0
   host.xRenderer.endFrame()
@@ -1594,7 +1598,7 @@ proc render*(host: HostWindow, scene: RenderScene, logicalSize: Size) =
   when defined(merendaDevControl):
     if host.captureNextFrame != 0:
       host.capturedFrame = captureFrame(
-        host.xRenderer, host.captureNextFrame, host.xRenderCount.uint64 + 1
+        host.xRenderer, host.captureNextFrame, host.xRenderCount.uint64 + 1, logicalSize
       )
       host.captureNextFrame = 0
   host.xRenderer.endFrame()
@@ -2093,7 +2097,9 @@ proc renderLatest(state: ThreadRendererHost) =
   when defined(merendaDevControl):
     var capture: RenderCapture
     if state.captureNextFrame != 0:
-      capture = captureFrame(state.renderer, state.captureNextFrame, state.lastRenderId)
+      capture = captureFrame(
+        state.renderer, state.captureNextFrame, state.lastRenderId, state.logicalSize
+      )
       state.captureNextFrame = 0
   state.renderer.endFrame()
   recordTerminalTrace("present", state.id, state.lastRenderId)

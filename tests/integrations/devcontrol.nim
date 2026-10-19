@@ -32,6 +32,8 @@ when defined(merendaDevControl) and defined(posix):
     result = decodeImage(decode(response["result"]["data"].getStr()))
     doAssert result.width == response["result"]["width"].getInt()
     doAssert result.height == response["result"]["height"].getInt()
+    doAssert response["result"]["scale"].getFloat() == result.width.float64 / 320.0
+    doAssert response["result"]["renderId"].getBiggestInt() > 0
 
   suite "Development control native process":
     for execution in ["main", "dedicated"]:
@@ -49,7 +51,7 @@ when defined(merendaDevControl) and defined(posix):
             (if execution == "main": "pid" else: explicitPath),
             execution,
           ],
-          options = {poStdErrToStdOut},
+          options = {poParentStreams},
         )
         let path =
           if execution == "main":
