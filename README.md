@@ -842,3 +842,7 @@ Compile with `-d:merenda.devControl` for optional local screenshots and input
 automation. `MERENDA_BACKGROUND=1` supports automated runs without activating the
 app on macOS. See [development control](docs/dev-control.md) for the PID/socket
 CLI and protocol.
+
+Development control uses Sigils JSON-RPC and includes live CSS load/reload commands.
+Merenda Settings' **Refresh theme** button rereads the selected theme's CSS without
+restarting the app.

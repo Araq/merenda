@@ -1,5 +1,13 @@
 ## Unreleased
 
+- Route development control through Sigils JSON-RPC selectors and dispatcher over
+  the private Unix socket. Keep asynchronous captures behind bounded result handles
+  and allow modal callbacks or shutdown to reenter polling safely.
+- Add `merenda-dev theme-load --file PATH` and `theme-reload` for live CSS changes.
+  Add Refresh theme below the font choice in Merenda Settings to reread the selected
+  bundled theme's CSS inheritance chain while preserving fonts. Failed loads keep
+  the current appearance. `MERENDA_THEME_CSS_DIR` selects an alternate source directory.
+
 - Add opt-in `-d:merenda.devControl` automation with explicit PID/socket addressing,
   renderer PNG screenshots, window inspection, pointer/key/text input, and a small
   CLI suitable for future MCP adapters.

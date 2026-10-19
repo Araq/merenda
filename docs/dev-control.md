@@ -14,6 +14,8 @@ app_pid=$!
 ./deps/merenda-dev --pid "$app_pid" pointer --window w1 --action click --x 80 --y 100
 ./deps/merenda-dev --pid "$app_pid" key --window w1 --action down --key a --modifiers command
 ./deps/merenda-dev --pid "$app_pid" text --window w1 --text 'Hello from automation'
+./deps/merenda-dev --pid "$app_pid" theme-load --file /absolute/path/theme.css
+./deps/merenda-dev --pid "$app_pid" theme-reload
 kill "$app_pid"
 wait "$app_pid"
 ```
@@ -89,26 +91,58 @@ does not simulate IME composition. Input follows ordinary NimKit dispatch and
 rejects modal-blocked windows. Responses distinguish successful delivery from the
 `handled` boolean returned by the responder.
 
-## Protocol and future adapters
+## Live themes
 
-The transport is one JSON line per request and response, then connection close:
+`theme-load --file PATH` reads CSS on the app's host and applies it to the
+application appearance, including existing windows that inherit it and later
+windows. The CLI resolves relative paths before sending them. `theme-reload`
+rereads the last successfully loaded file. Each load compiles against the original
+appearance saved on the first load, so removing declarations removes their effects.
+Filesystem errors and CSS diagnostics leave the current appearance and reload path
+unchanged. These commands require an enabled development endpoint.
+
+Merenda Settings also has a **Refresh theme** button below the font choice on the
+Typography tab. It rereads the selected bundled theme's complete CSS inheritance
+chain, including `base.css` and parent themes, and keeps the chosen fonts and size.
+This button is available in regular builds. It reads the source `stylesheets/`
+directory recorded at build time; set `MERENDA_THEME_CSS_DIR` to another directory
+containing the bundled CSS files when developing from an installed app. The panel
+shows CSS or filesystem errors without replacing the active theme.
+
+## Sigils RPC and future adapters
+
+The private Unix socket implements Sigils' `JsonRpcIoAgent` boundary. Sigils'
+`JsonRpcAdapter` and `JsonRpcDispatcher` validate JSON-RPC 2.0 messages and dispatch
+the explicitly registered typed selectors on the owning GUI thread. No extra
+helper thread or TCP listener is needed. Socket I/O finishes iterating connections
+before emitting requests, so nested modal event loops and shutdown callbacks can
+safely poll or close the endpoint.
+
+The transport is one compact JSON-RPC request and response per connection,
+separated by newlines. `merenda.request` takes the named `DevRequest` parameters:
 
 ```json
-{"version":1,"id":"r1","command":"screenshot","params":{"window":"w1"}}
-{"version":1,"id":"r1","ok":true,"result":{"mimeType":"image/png","width":640,"height":480,"scale":2,"data":"..."}}
+{"jsonrpc":"2.0","id":"r1","method":"merenda.request","params":{"command":"windows"}}
+{"jsonrpc":"2.0","id":"r1","result":{"version":1,"id":"","ok":true,"result":{"windows":[]}}}
 ```
 
-Failures use stable string codes:
+Application failures use stable string codes inside the result, such as
+`window_not_found`, `invalid_css`, or `theme_load_failed`. Invalid JSON-RPC messages,
+unknown methods, and invalid selector arguments use Sigils' standard JSON-RPC
+errors, including `-32601` and `-32602`.
 
-```json
-{"version":1,"id":"r1","ok":false,"error":{"code":"window_not_found","message":"Window is unavailable: w1"}}
-```
+Screenshots finish asynchronously. The first call returns an application result
+containing `{"pending":"r1"}`. Retrieve it with
+`merenda.result` and `{"token":"r1"}` on another connection. This returns the same
+pending handle while rendering is in progress, then consumes the completed result.
+Handles are bounded to four and expire after fifteen seconds. **Poll the result
+handle; do not resend the original input command.** `sendDevRequest` and the CLI
+perform these steps automatically within one overall timeout.
 
-The public `DevRequest`, `DevResponse`, and codecs live in
-`merenda/nimkit/devcontrol/protocol`; `devSocketPath` and `sendDevRequest` live in
-`merenda/nimkit/devcontrol/transport`. These modules have no GUI dependencies.
-A future MCP server can translate tools into typed requests and return the PNG
-payload directly, without screen-capture permissions or a shell subprocess.
-Protocol versioning, explicit instance addressing and structured errors form the
-adapter boundary. Discovery, view selectors, accessibility trees, OS-level input,
-native-menu automation and an MCP server itself are deferred.
+The public `DevRequest`, `DevResponse`, selector descriptors and JSON hooks live in
+`merenda/nimkit/devcontrol/protocol`; `devSocketPath`, `sendDevRpcRequest`, and
+`sendDevRequest` live in `merenda/nimkit/devcontrol/transport`. These modules have no
+GUI dependencies. A future MCP server can call the registered selectors through
+JSON-RPC, or reuse the synchronous client wrapper and return PNG payloads directly.
+Discovery, view selectors, accessibility trees, OS-level input, native-menu
+automation and an MCP server itself are deferred.

@@ -1,5 +1,9 @@
 ## Versioned development-control messages shared by apps, CLI clients and adapters.
 import std/[json, math, strutils]
+import sigils/selectors
+import sigils/rpcs/jsonrpc
+
+export jsonrpc
 
 const
   DevProtocolVersion* = 1
@@ -14,6 +18,8 @@ type
     dcPointer
     dcKey
     dcText
+    dcThemeLoad
+    dcThemeReload
 
   DevRequest* = object
     id*: string
@@ -24,6 +30,7 @@ type
     button*: string
     key*: string
     text*: string
+    file*: string
     modifiers*: seq[string]
 
   DevResponse* = object
@@ -34,7 +41,17 @@ type
   DevProtocolError* = object of CatchableError
     code*: string
 
-const CommandNames = ["info", "windows", "screenshot", "pointer", "key", "text"]
+  DevPendingQuery* = object
+    token*: string
+
+let
+  DevRequestSelector* = selector[DevRequest, JsonNode]("request")
+  DevResultSelector* = selector[DevPendingQuery, JsonNode]("result")
+
+const CommandNames = [
+  "info", "windows", "screenshot", "pointer", "key", "text", "theme-load",
+  "theme-reload",
+]
 
 proc reject(code, message: string) {.noreturn.} =
   let error = newException(DevProtocolError, message)
@@ -74,10 +91,6 @@ proc parseDevRequest*(line: string): DevRequest =
   if root.kind != JObject:
     reject("invalid_request", "Expected a JSON object")
   result.id = root.stringField("id")
-  if not root.hasKey("version") or root["version"].kind != JInt:
-    reject("invalid_request", "Expected integer version")
-  if root["version"].getBiggestInt() != DevProtocolVersion:
-    reject("unsupported_version", "Unsupported protocol version")
   let command = root.stringField("command", true)
   var found = false
   for candidate in DevCommand:
@@ -86,12 +99,12 @@ proc parseDevRequest*(line: string): DevRequest =
       found = true
   if not found:
     reject("unknown_command", "Unknown command: " & command)
-  let params = (if root.hasKey("params"): root["params"]
-  else: newJObject())
-  if params.kind != JObject:
-    reject("invalid_request", "Expected params object")
-  if result.command notin {dcInfo, dcWindows}:
+  let params = root
+  if result.command notin {dcInfo, dcWindows, dcThemeLoad, dcThemeReload}:
     result.window = params.stringField("window", true)
+  result.file = params.stringField("file", result.command == dcThemeLoad)
+  if result.command == dcThemeLoad and result.file.len == 0:
+    reject("invalid_request", "Expected CSS file path")
   result.action = params.stringField("action")
   result.text = params.stringField("text", result.command == dcText)
   result.key = params.stringField("key", result.command == dcKey)
@@ -117,23 +130,32 @@ proc parseDevRequest*(line: string): DevRequest =
     reject("invalid_request", "Unknown key action")
 
 proc requestJson*(request: DevRequest): JsonNode =
-  result = %*{
-    "version": DevProtocolVersion,
+  ## Named parameters for the registered merenda.request selector.
+  %*{
     "id": request.id,
     "command": CommandNames[request.command.ord],
-    "params": {
-      "window": request.window,
-      "action": request.action,
-      "x": request.x,
-      "y": request.y,
-      "deltaX": request.deltaX,
-      "deltaY": request.deltaY,
-      "button": request.button,
-      "key": request.key,
-      "text": request.text,
-      "modifiers": request.modifiers,
-    },
+    "window": request.window,
+    "action": request.action,
+    "x": request.x,
+    "y": request.y,
+    "deltaX": request.deltaX,
+    "deltaY": request.deltaY,
+    "button": request.button,
+    "key": request.key,
+    "text": request.text,
+    "file": request.file,
+    "modifiers": request.modifiers,
   }
+
+proc fromJsonHook*(request: var DevRequest, node: JsonNode) =
+  request = parseDevRequest($node)
+
+proc toJsonHook*(request: DevRequest): JsonNode =
+  request.requestJson()
+
+proc rpcRequestJson*(request: DevRequest): JsonNode =
+  ## Standard JSON-RPC request accepted by Sigils' registered endpoint.
+  newJsonRpcRequest(%request.id, "merenda.request", request.requestJson())
 
 proc devSuccess*(id: string, payload: JsonNode): DevResponse =
   DevResponse(id: id, result: payload)

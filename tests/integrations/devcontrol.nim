@@ -130,6 +130,29 @@ when defined(merenda.devControl) and defined(posix):
         check text["result"]["handled"].getBool()
         let typed = capture(path, window)
         check typed.data != after.data
+        let cssFile = directory / "theme.css"
+        let notLoaded = request(path, dcThemeReload)
+        check notLoaded["error"]["code"].getStr() == "theme_not_loaded"
+        writeFile(cssFile, "#dev-theme-probe { background-color: #ff0000; }")
+        let loaded = sendDevRequest(
+          path, DevRequest(id: "css", command: dcThemeLoad, file: cssFile)
+        )
+        checkpoint($loaded)
+        check loaded["ok"].getBool()
+        let redTheme = capture(path, window)
+        check redTheme[290 * scale, 35 * scale].r > 240
+        check redTheme[290 * scale, 35 * scale].b < 10
+        writeFile(cssFile, "#dev-theme-probe { background-color: #0000ff; }")
+        check request(path, dcThemeReload)["ok"].getBool()
+        let blueTheme = capture(path, window)
+        check blueTheme[290 * scale, 35 * scale].b > 240
+        check blueTheme[290 * scale, 35 * scale].r < 10
+        writeFile(cssFile, "#dev-theme-probe { background-color: invalid-color; }")
+        let invalidCss = request(path, dcThemeReload)
+        check invalidCss["error"]["code"].getStr() == "invalid_css"
+        let retainedTheme = capture(path, window)
+        check retainedTheme[290 * scale, 35 * scale].b > 240
+        check retainedTheme[290 * scale, 35 * scale].r < 10
         let unknown = request(path, dcScreenshot, "missing")
         check unknown["error"]["code"].getStr() == "window_not_found"
         when defined(macosx):
@@ -198,7 +221,7 @@ when defined(merenda.devControl) and defined(posix):
             action: "click",
             x: 250,
             y: 95,
-          ).requestJson() & "\n"
+          ).rpcRequestJson() & "\n"
         )
         stop.close()
         let exitDeadline = getMonoTime() + initDuration(seconds = 10)
@@ -252,10 +275,11 @@ when defined(merenda.devControl) and defined(posix):
       defer:
         client.close()
       client.connectUnix(path)
-      client.send("{\"version\":1,\"id\":\"split\",")
+      let wire = $DevRequest(id: "split", command: dcInfo).rpcRequestJson() & "\n"
+      client.send(wire[0 ..< wire.len div 2])
       server.poll()
       check called == 0
-      client.send("\"command\":\"info\"}\n")
+      client.send(wire[wire.len div 2 .. ^1])
       client.getFd().setBlocking(false)
       let deadline = getMonoTime() + initDuration(seconds = 10)
       var response: string
@@ -274,9 +298,9 @@ when defined(merenda.devControl) and defined(posix):
       check called == 1
       let decoded = parseJson(response.strip())
       check decoded["id"].getStr() == "split"
-      check decoded["result"]["payload"].getStr() == payload
+      check decoded["result"]["result"]["payload"].getStr() == payload
 
-    test "disconnected pending clients free connection capacity":
+    test "disconnected clients free connection capacity":
       let directory = createTempDir("mdc-", "", "/tmp")
       setFilePermissions(directory, {fpUserRead, fpUserWrite, fpUserExec})
       let path = directory / "control.sock"
@@ -287,15 +311,15 @@ when defined(merenda.devControl) and defined(posix):
         path,
         proc(request: DevRequest, complete: DevCompletion) =
           inc called
-        ,
-      ) # Leave completion pending to exercise a disappearing client.
+          complete(devSuccess(request.id, %*{"ready": true})),
+      )
       defer:
         server.close()
       for index in 0 ..< 8:
         let client =
           newSocket(AF_UNIX, SOCK_STREAM, nativesockets.IPPROTO_NONE, buffered = false)
         client.connectUnix(path)
-        client.send($DevRequest(id: $index, command: dcInfo).requestJson() & "\n")
+        client.send($DevRequest(id: $index, command: dcInfo).rpcRequestJson() & "\n")
         let deadline = getMonoTime() + initDuration(seconds = 2)
         while called <= index and getMonoTime() < deadline:
           server.poll()
@@ -303,6 +327,55 @@ when defined(merenda.devControl) and defined(posix):
         check called == index + 1
         client.close()
         server.poll()
+
+    test "recursive polling after a client disconnect does not remove a stale index":
+      let directory = createTempDir("mdc-", "", "/tmp")
+      setFilePermissions(directory, {fpUserRead, fpUserWrite, fpUserExec})
+      let path = directory / "control.sock"
+      var server: DevServer
+      let client =
+        newSocket(AF_UNIX, SOCK_STREAM, nativesockets.IPPROTO_NONE, buffered = false)
+      defer:
+        client.close()
+        server.close()
+        removeDir(directory)
+      var called = false
+      server = startDevServer(
+        path,
+        proc(request: DevRequest, complete: DevCompletion) =
+          called = true
+          client.close()
+          server.poll()
+          complete(devSuccess(request.id, %*{"ready": true})),
+      )
+      client.connectUnix(path)
+      client.send($DevRequest(id: "nested", command: dcInfo).rpcRequestJson() & "\n")
+      server.poll()
+      check called
+      server.poll()
+
+    test "a request callback can close its own endpoint":
+      let directory = createTempDir("mdc-", "", "/tmp")
+      setFilePermissions(directory, {fpUserRead, fpUserWrite, fpUserExec})
+      let path = directory / "control.sock"
+      var server: DevServer
+      let client =
+        newSocket(AF_UNIX, SOCK_STREAM, nativesockets.IPPROTO_NONE, buffered = false)
+      defer:
+        client.close()
+        server.close()
+        removeDir(directory)
+      server = startDevServer(
+        path,
+        proc(request: DevRequest, complete: DevCompletion) =
+          server.close()
+          complete(devSuccess(request.id, %*{"ready": true})),
+      )
+      client.connectUnix(path)
+      client.send($DevRequest(id: "close", command: dcInfo).rpcRequestJson() & "\n")
+      server.poll()
+      server.poll()
+      check not socketExists(path)
 
     test "shutdown preserves an endpoint replaced after startup":
       let directory = createTempDir("mdc-", "", "/tmp")

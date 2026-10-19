@@ -208,8 +208,7 @@ suite "NimKit CSS themes":
       parseHtmlColor("red")
 
   test "composite variables project padding radii sizes and shadows and recompile on edits":
-    let source =
-      """
+    let source = """
       :root {
         --gap: 2px 4px 6px 8px;
         --radius: 1px 2px 3px 4px;
@@ -272,10 +271,10 @@ suite "NimKit CSS themes":
         102'u8,
       )
     check cleanTheme("button { background: linear-gradient(to top, red, blue); }")
-    .resolveButtonStyle(controlStyle(srButton)).box.fill ==
+      .resolveButtonStyle(controlStyle(srButton)).box.fill ==
       linear(parseHtmlColor("blue"), parseHtmlColor("red"), fgaY)
     check cleanTheme("button { background: linear-gradient(45deg, red, blue); }")
-    .resolveButtonStyle(controlStyle(srButton)).box.fill ==
+      .resolveButtonStyle(controlStyle(srButton)).box.fill ==
       linear(parseHtmlColor("red"), parseHtmlColor("blue"), fgaDiagBLTR)
     for gradient in [
       "linear-gradient(12deg, red, blue)", "linear-gradient(red, blue, lime, black)",
@@ -686,7 +685,7 @@ suite "NimKit CSS themes":
       checkpoint(source.escape())
       check parseCssTheme(source).diagnostics.len > 0
     check cleanTheme("button { font-family: \"D'Angelo\"; }")
-    .resolveButtonStyle(controlStyle(srButton)).text.fontName == "D'Angelo"
+      .resolveButtonStyle(controlStyle(srButton)).text.fontName == "D'Angelo"
 
   test "empty CSS preserves generation and snapshots do not expose cascade storage":
     let base = initTheme()
@@ -701,6 +700,20 @@ suite "NimKit CSS themes":
     check theme.textColor(controlStyle(srButton, classes = @["primary"])) ==
       parseHtmlColor("red")
     check initThemeBuilder(theme).finish().generation == theme.generation
+
+  test "all bundled themes rebuild from their on disk CSS inheritance chain":
+    for name in [
+      "aqua", "banner", "macos", "macos-dark", "darkbsd", "nebula", "peachy",
+      "synthwave83",
+    ]:
+      checkpoint(name)
+      let loaded = reloadThemeCss(name, BuiltinThemeCssDirectory)
+      checkpoint($loaded.diagnostics)
+      check loaded.diagnostics.len == 0
+      check loaded.theme.isInitialized
+      check loaded.theme.fontName(frUI).len > 0
+    expect ValueError:
+      discard reloadThemeCss("unknown-theme")
 
   test "file loading keeps CSS diagnostics and reports filesystem errors":
     let (file, path) = createTempFile("nimkit-css-", ".css")

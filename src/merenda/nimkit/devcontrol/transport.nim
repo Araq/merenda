@@ -1,5 +1,7 @@
 ## Private Unix-socket transport. No GUI imports or implicit instance discovery.
-import std/[json, monotimes, nativesockets, net, os, strutils, times]
+import std/[json, monotimes, nativesockets, net, os, strutils, tables, times]
+import sigils/[core, selectors]
+import sigils/rpcs/json/jrAgents
 import ./protocol
 
 when defined(posix):
@@ -21,16 +23,30 @@ type
 
   DevConnection = ref object
     socket: Socket
+    id: uint64
     input, output: string
     sent: int
     dispatched, closed: bool
     deadline: MonoTime
 
-  DevServer* = ref object
+  DevPendingReply = ref object
+    response: DevResponse
+    finished: bool
+    deadline: MonoTime
+
+  DevRpcEndpoint = ref object of DynamicAgent
+    handler: DevHandler
+    replies: Table[string, DevPendingReply]
+    nextToken: uint64
+    closed: bool
+
+  DevServer* = ref object of JsonRpcIoAgent
     socket: Socket
     path: string
     clients: seq[DevConnection]
-    handler: DevHandler
+    endpoint: DevRpcEndpoint
+    dispatcher: JsonRpcDispatcher
+    nextConnection: uint64
     closed: bool
     when defined(posix):
       device: Dev
@@ -57,7 +73,9 @@ proc close*(server: DevServer) =
   for connection in server.clients:
     connection.close()
   server.clients.setLen(0)
-  server.handler = nil
+  server.endpoint.closed = true
+  server.endpoint.handler = nil
+  server.endpoint.replies.clear()
   server.socket.close()
   when defined(posix):
     var status: Stat
@@ -71,6 +89,44 @@ proc validateSocketPath(path: string) =
       ValueError,
       "Socket path must be absolute and at most " & $DevMaxSocketPath & " bytes",
     )
+
+proc dispatchRequest(self: DynamicAgent, request: DevRequest): JsonNode =
+  let endpoint = DevRpcEndpoint(self)
+  if endpoint.closed:
+    return devFailure(request.id, "unavailable", "Development control stopped")
+      .responseJson()
+  let reply = DevPendingReply(deadline: getMonoTime() + DevIoTimeout)
+  endpoint.handler(
+    request,
+    proc(response: DevResponse) =
+      if not reply.finished:
+        reply.response = response
+        reply.finished = true
+    ,
+  )
+  if reply.finished:
+    return reply.response.responseJson()
+  if endpoint.closed:
+    return devFailure(request.id, "unavailable", "Development control stopped")
+      .responseJson()
+  if endpoint.replies.len >= DevMaxClients:
+    return
+      devFailure(request.id, "busy", "Pending request queue is full").responseJson()
+  inc endpoint.nextToken
+  let token = "r" & $endpoint.nextToken
+  endpoint.replies[token] = reply
+  devSuccess(request.id, %*{"pending": token}).responseJson()
+
+proc pendingResult(self: DynamicAgent, query: DevPendingQuery): JsonNode =
+  let endpoint = DevRpcEndpoint(self)
+  if not endpoint.replies.hasKey(query.token):
+    return
+      devFailure("", "result_not_found", "Pending result is unavailable").responseJson()
+  let reply = endpoint.replies[query.token]
+  if not reply.finished:
+    return devSuccess("", %*{"pending": query.token}).responseJson()
+  endpoint.replies.del(query.token)
+  reply.response.responseJson()
 
 proc startDevServer*(path: string, handler: DevHandler): DevServer =
   ## Refuses occupied paths and directories not privately owned by this user.
@@ -89,6 +145,13 @@ proc startDevServer*(path: string, handler: DevHandler): DevServer =
       raise newException(
         OSError, "Socket directory must be owned by this user with mode 0700"
       )
+    let endpoint = DevRpcEndpoint(handler: handler)
+    discard endpoint.addMethod(DevRequestSelector, toDynamicMethod(dispatchRequest))
+    discard endpoint.addMethod(DevResultSelector, toDynamicMethod(pendingResult))
+    let adapter = newJsonRpcAdapter()
+    adapter.registerSelector("merenda", endpoint, DevRequestSelector)
+    adapter.registerSelector("merenda", endpoint, DevResultSelector)
+    let dispatcher = newJsonRpcDispatcher(adapter)
     let socket =
       newSocket(AF_UNIX, SOCK_STREAM, nativesockets.IPPROTO_NONE, buffered = false)
     var bound = false
@@ -104,10 +167,12 @@ proc startDevServer*(path: string, handler: DevHandler): DevServer =
       result = DevServer(
         socket: socket,
         path: path,
-        handler: handler,
+        endpoint: endpoint,
+        dispatcher: dispatcher,
         device: status.st_dev,
         inode: status.st_ino,
       )
+      dispatcher.connectJsonRpc(result)
     except:
       socket.close()
       if bound:
@@ -116,15 +181,26 @@ proc startDevServer*(path: string, handler: DevHandler): DevServer =
   else:
     raise newException(OSError, "Development control requires Unix sockets")
 
-proc queueResponse(connection: DevConnection, response: DevResponse) =
-  if connection.closed or connection.output.len > 0:
+method startIo(server: DevServer) {.gcsafe.} =
+  if not server.closed:
+    emit server.jsonRpcStarted(server.path)
+
+method stopIo(server: DevServer) {.gcsafe.} =
+  server.close()
+  emit server.jsonRpcStopped()
+
+method queueResponse(server: DevServer, response: sink JsonRpcResponse) {.gcsafe.} =
+  if server.closed:
     return
-  connection.output = $response.responseJson() & "\n"
-  if connection.output.len > DevMaxResponseBytes:
-    connection.output =
-      $devFailure(response.id, "capture_failed", "Response exceeds size limit")
-        .responseJson() & "\n"
-  connection.deadline = getMonoTime() + DevIoTimeout
+  for connection in server.clients:
+    if connection.id == response.connectionId and not connection.closed:
+      if connection.output.len == 0:
+        if response.data.len + 1 > DevMaxResponseBytes:
+          connection.close()
+        else:
+          connection.output = response.data & "\n"
+          connection.deadline = getMonoTime() + DevIoTimeout
+      return
 
 proc socketWouldBlock(): bool =
   when defined(posix):
@@ -135,14 +211,24 @@ proc poll*(server: DevServer) =
   ## Bounded, nonblocking work on the application's owning thread.
   if server.isNil or server.closed:
     return
+  var expired: seq[string]
+  for token, reply in server.endpoint.replies:
+    if getMonoTime() >= reply.deadline:
+      expired.add token
+  for token in expired:
+    server.endpoint.replies.del(token)
+  var requests: seq[JsonRpcRequest]
   var handles = @[server.socket.getFd()]
   if server.clients.len < DevMaxClients and selectRead(handles, 0) > 0:
     try:
       var client: owned(Socket)
       server.socket.accept(client)
       client.getFd().setBlocking(false)
+      inc server.nextConnection
       server.clients.add DevConnection(
-        socket: client, deadline: getMonoTime() + DevIoTimeout
+        id: server.nextConnection,
+        socket: client,
+        deadline: getMonoTime() + DevIoTimeout,
       )
     except OSError:
       discard # Readiness can be interrupted before accept completes.
@@ -180,32 +266,14 @@ proc poll*(server: DevServer) =
             chunk.setLen(received)
             connection.input.add chunk
             if connection.input.len > DevMaxRequestBytes:
-              connection.dispatched = true
-              connection.queueResponse(
-                devFailure("", "invalid_request", "Request is too large")
-              )
+              connection.close()
             elif '\n' in connection.input:
               connection.dispatched = true
-              let line = connection.input[0 ..< connection.input.find('\n')]
-              var id: string
-              try:
-                let root = parseJson(line)
-                if root.kind == JObject and root.hasKey("id") and
-                    root["id"].kind == JString:
-                  id = root["id"].getStr()
-                let request = parseDevRequest(line)
-                try:
-                  server.handler(
-                    request,
-                    proc(response: DevResponse) =
-                      connection.queueResponse(response),
-                  )
-                except CatchableError as error:
-                  connection.queueResponse(devFailure(id, "internal_error", error.msg))
-              except DevProtocolError as error:
-                connection.queueResponse(devFailure(id, error.code, error.msg))
-              except CatchableError as error:
-                connection.queueResponse(devFailure(id, "invalid_request", error.msg))
+              requests.add JsonRpcRequest(
+                connectionId: connection.id,
+                data: connection.input[0 ..< connection.input.find('\n')],
+              )
+              connection.input.setLen(0)
     except CatchableError:
       connection.close()
     if connection.closed:
@@ -213,7 +281,14 @@ proc poll*(server: DevServer) =
     else:
       inc index
 
-proc sendDevRequest*(path: string, request: DevRequest, timeoutMs = 15000): JsonNode =
+  # Dispatch only after socket iteration. A handler can enter a modal loop,
+  # poll recursively, or stop this endpoint without invalidating an outer index.
+  for request in requests:
+    if server.closed:
+      break
+    emit server.jsonRpcRequestReceived(request)
+
+proc sendDevRpcRequest*(path: string, request: JsonNode, timeoutMs = 15000): JsonNode =
   ## Sends once. A timeout never retries a possibly executed input command.
   when defined(posix):
     validateSocketPath(path)
@@ -226,7 +301,9 @@ proc sendDevRequest*(path: string, request: DevRequest, timeoutMs = 15000): Json
     socket.getFd().setBlocking(false)
     socket.connectUnix(path)
     let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
-    let message = $request.requestJson() & "\n"
+    let message = $request & "\n"
+    if message.len > DevMaxRequestBytes:
+      raise newException(ValueError, "Control request exceeds size limit")
     var sent = 0
     var input: string
     while getMonoTime() < deadline:
@@ -258,14 +335,38 @@ proc sendDevRequest*(path: string, request: DevRequest, timeoutMs = 15000): Json
           let newline = input.find('\n')
           if newline >= 0:
             result = parseJson(input[0 ..< newline])
-            if result.kind != JObject or not result.hasKey("version") or
-                result["version"] != %DevProtocolVersion or
-                result.getOrDefault("id") != %request.id or not result.hasKey("ok") or
-                result["ok"].kind != JBool:
-              raise newException(IOError, "Invalid control response")
+            if result.kind != JObject or
+                result.getOrDefault("jsonrpc") != %JsonRpcVersion or
+                result.getOrDefault("id") != request.getOrDefault("id") or
+                result.hasKey("result") == result.hasKey("error"):
+              raise newException(IOError, "Invalid JSON-RPC control response")
             return
     raise newException(
       IOError, "Control request timed out; execution may already have occurred"
     )
   else:
     raise newException(OSError, "Development control requires Unix sockets")
+
+proc sendDevRequest*(path: string, request: DevRequest, timeoutMs = 15000): JsonNode =
+  ## Calls Sigils RPC once, then retrieves a pending result without retrying input.
+  if timeoutMs <= 0:
+    raise newException(ValueError, "Timeout must be positive")
+  let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+  proc exchange(message: JsonNode): JsonNode =
+    let remaining = max(1, (deadline - getMonoTime()).inMilliseconds.int)
+    let response = sendDevRpcRequest(path, message, remaining)
+    if response.hasKey("error"):
+      return devFailure(request.id, "rpc_error", $response["error"]).responseJson()
+    response["result"]
+
+  result = exchange(request.rpcRequestJson())
+  while result["ok"].getBool() and result["result"].kind == JObject and
+      result["result"].hasKey("pending"):
+    if getMonoTime() >= deadline:
+      raise newException(
+        IOError, "Control request timed out; execution may already have occurred"
+      )
+    let token = result["result"]["pending"].getStr()
+    sleep(5)
+    result =
+      exchange(newJsonRpcRequest(%request.id, "merenda.result", %*{"token": token}))

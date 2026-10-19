@@ -1356,6 +1356,10 @@ when defined(merenda.devControl):
         app.xWindows,
       proc(window: Window): bool =
         app.windowBlockedByModal(window),
+      proc(): Appearance =
+        app.effectiveAppearance(),
+      proc(appearance: Appearance) =
+        app.setAppearance(appearance),
     )
 
 proc runApplicationFrame(app: Application): int =

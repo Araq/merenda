@@ -24,6 +24,9 @@ when defined(merenda.devControl) and defined(posix):
     root.addSubview(lower)
     let field = newTextField("Ready", frame = rect(20, 30, 240, 36))
     root.addSubview(field)
+    let themeProbe = newView(frame = rect(275, 20, 30, 30))
+    themeProbe.styleId = "dev-theme-probe"
+    root.addSubview(themeProbe)
     let button = newButton("Change", frame = rect(20, 80, 100, 30))
     let action = actionSelector("changeProbe")
     button.action = action

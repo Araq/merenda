@@ -3,9 +3,10 @@ import std/[base64, json, os, strutils]
 import merenda/nimkit/devcontrol/[protocol, transport]
 
 const Usage = """Usage: merenda-dev (--pid PID | --socket PATH) COMMAND [options]
-Commands: info, windows, screenshot, pointer, key, text
+Commands: info, windows, screenshot, pointer, key, text, theme-load, theme-reload
 Options:
   --window ID       Target ID returned by windows
+  --file PATH       CSS file to load; theme-reload rereads the last loaded file
   --output PATH     Write screenshot PNG in this client process
   --action NAME     pointer: move/down/up/drag/click/scroll; key: down/up
   --x N --y N       Logical content coordinates
@@ -48,6 +49,8 @@ proc main() =
       inc targets
     of "--window":
       request.window = value()
+    of "--file":
+      request.file = absolutePath(value())
     of "--output":
       output = value()
     of "--action":
@@ -87,6 +90,10 @@ proc main() =
           dcKey
         of "text":
           dcText
+        of "theme-load":
+          dcThemeLoad
+        of "theme-reload":
+          dcThemeReload
         else:
           raise newException(ValueError, "Unknown command: " & argument)
       commandFound = true
