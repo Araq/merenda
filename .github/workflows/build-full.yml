@@ -104,7 +104,7 @@ jobs:
           libgles2
 
     - name: Install Deps
-      run: bash .github/scripts/install-deps.sh -tu --features:kosmo
+      run: bash .github/scripts/install-deps.sh -tu --features:kosmo,nifDemo
 
     - name: Clean generated examples
       run: bash .github/scripts/clean_generated_examples.sh
@@ -501,7 +501,7 @@ jobs:
         fi
 
     - name: Install Deps
-      run: bash .github/scripts/install-deps.sh -t --update
+      run: bash .github/scripts/install-deps.sh -t --update --features:nifDemo
 
     - name: Clean generated examples
       run: bash .github/scripts/clean_generated_examples.sh

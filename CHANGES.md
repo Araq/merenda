@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Duplicate the HTML GUI demo with NIF interface and stylesheet files, preserving
+  its preferences, Preview/Reset actions, theme switching, and About window. The
+  theme uses native selector nodes, numeric lengths, keywords, and token references.
+  Use the optional `nifDemo` Atlas feature with OpenParser 0.4.1 or newer. NIF
+  numbers support hexadecimal, octal, binary, and digit separators; quoted strings
+  accept literal `#`, `:`, and `;`. Restore the working example vocabulary and
+  preserve short colors, leading zeros, and alpha in hexadecimal color literals.
+  Add a matching shorthand demo with native widget properties, ComboBox options,
+  and line-based style rules with grouped borders, chrome, and token references.
+
 - Move NimKit table modules into `nimkit/tables/`. Direct module imports now use
   `nimkit/tables/tableviews` and `nimkit/tables/tablebasics`; `merenda/nimkit`
   continues to export the public table APIs.

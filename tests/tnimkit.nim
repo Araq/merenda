@@ -44,6 +44,8 @@ else:
   import nimkit/gitstatus
   import nimkit/gridviews
   import nimkit/htmlresources
+  when defined(features.merenda.nifDemo):
+    import nimkit/nifresources
   import nimkit/iconlabels
   import nimkit/images
   import nimkit/itemcollections

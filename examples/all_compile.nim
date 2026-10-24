@@ -26,6 +26,9 @@ import font_fallback_demo
 import grid_preferences
 import hello
 import html_ui_demo
+when defined(features.merenda.nifDemo):
+  import nif_ui_demo
+  import nif_shorthand_demo
 import image_resources_demo
 import layout_showcase
 import matrix_demo
