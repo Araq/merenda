@@ -1233,13 +1233,45 @@ proc openTerminalLink(lifecycle: KosmoWindowLifecycle, link: string) {.slot.} =
   if not frontend.isNil and not frontend.application.isNil:
     discard frontend.application.workspace().openUrl(link)
 
+proc openFileLocation(
+    frontend: KosmoApplication, location: nimkit.TerminalFileLocation
+): bool =
+  let
+    controller = frontend.dockController
+    view = controller.activeEditorView()
+  if not view.isNil and view.openFile(location.path):
+    let target = controller.activeEditorView()
+    if location.line > 0:
+      for tab in controller.editor.tabs():
+        if tab.active and tab.isMarkdownTab and target.markdownMode(tab.id) == kmmPreview:
+          discard target.toggleMarkdownMode(tab.id)
+      discard controller.editor.revealLocation(
+        location.line - 1, max(location.column - 1, 0), centered = true
+      )
+    target.refresh()
+    result = true
+
+proc openTerminalFile(
+    lifecycle: KosmoWindowLifecycle, location: nimkit.TerminalFileLocation
+) {.slot.} =
+  if not lifecycle.isNil and not lifecycle.frontend.isNil:
+    discard lifecycle.frontend[].openFileLocation(location)
+
+iterator gitDiffPanels(frontend: KosmoApplication): KosmoGitDiffPanel =
+  if not frontend.isNil and not frontend.xClosed and not frontend.dockController.isNil:
+    for group in frontend.dockController.groups:
+      if not group.window.isNil and not group.window.isClosed():
+        for document in group.documents:
+          if document.contentView of KosmoGitDiffPanel:
+            yield KosmoGitDiffPanel(document.contentView)
+
 proc workspaceGitChanged(lifecycle: KosmoWindowLifecycle) {.slot.} =
   if not lifecycle.frontend.isNil and not lifecycle.frontend[].xClosed:
     # All panes share one Moe engine. Invalidate once, not once per pane.
     let frontend = lifecycle.frontend[]
     frontend.dockController.editor.notifyGitRepositoryChanged()
-    if not frontend.gitDiffPanel.isNil:
-      frontend.gitDiffPanel.scheduleRepositoryRefresh()
+    for panel in frontend.gitDiffPanels():
+      panel.scheduleRepositoryRefresh()
     if not frontend.gitHubPanel.isNil:
       frontend.gitHubPanel.scheduleRepositoryRefresh()
 
@@ -1247,8 +1279,8 @@ proc pollWorkspaceGit(lifecycle: KosmoWindowLifecycle) {.slot.} =
   if not lifecycle.frontend.isNil and not lifecycle.frontend[].xClosed:
     let frontend = lifecycle.frontend[]
     let controller = frontend.dockController
-    if not frontend.gitDiffPanel.isNil:
-      discard frontend.gitDiffPanel.pollRepositoryRefresh()
+    for panel in frontend.gitDiffPanels():
+      discard panel.pollRepositoryRefresh()
     if not frontend.gitHubPanel.isNil:
       discard frontend.gitHubPanel.pollRepositoryRefresh()
     if lifecycle.monitorsGitStatus:
@@ -1300,6 +1332,9 @@ proc newTerminalDocument(
     terminalView.terminalInputPolicy = frontend.xTerminalInputPolicy
     terminalView.connect(
       nimkit.terminalHyperlinkWasActivated, frontend.xWindowLifecycle, openTerminalLink
+    )
+    terminalView.connect(
+      nimkit.terminalFileWasActivated, frontend.xWindowLifecycle, openTerminalFile
     )
     if not frontend.xWindowManager.isNil:
       let manager = frontend.xWindowManager[]

@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 0.29.1
+
+- Publish Linux, FreeBSD, and macOS release assets without waiting for Windows,
+  then add Windows in a separate upload job while preserving the shared checksum list.
+
+- Keep Git diff toolbar symbols visible in Punch's compact buttons. Give the
+  GitHub viewer the same Refresh icon at the toolbar's right edge.
+
+- Keep separate Git diff viewers for different projects, including detached windows.
+  Reuse each project's viewer and refresh all open viewers without retargeting another project.
+
+- Open existing terminal file paths in Kosmo with Command-click on macOS or
+  Control-click on Linux and Windows. Support `filename:line:column` and Nim's
+  `filename(line, column)` / `filename(line)` diagnostics in both terminal links
+  and CLI arguments, including forwarded and background launches. Resolve terminal
+  paths using the terminal's directory and support OSC file hyperlinks.
+
+- Prevent stuck modifiers after macOS screenshot capture by using refreshed native
+  modifier flags instead of stale cached key presses.
+
 ## 0.29.0
 
 - Let Kosmo’s focused file tree use unmodified `h/j/k/l` as left/down/up/right
