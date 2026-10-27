@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.29.2
+
+- Fix terminal underline artifacts and cursor jumps in Claude Code by updating
+  Terminex's handling of private keyboard control sequences.
+- Keep Backspace and cursor movement in the focused terminal search field instead
+  of forwarding those keys to the running terminal process.
+
 ## 0.29.1
 
 - Publish Linux, FreeBSD, and macOS release assets without waiting for Windows,

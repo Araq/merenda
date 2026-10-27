@@ -17,6 +17,62 @@ proc waitForTerminalText(view: TerminalView, text: string): bool =
 
 suite "Kosmo terminal shortcut PTY input":
   when defined(posix):
+    test "terminal search edits stay in the focused field until it is dismissed":
+      let
+        session = spawnTerminalViewSession(
+          initTerminalSpawnOptions(
+            command =
+              "stty raw -echo; printf 'SEARCH_READY\\r\\nalpha\\r\\n'; " &
+              "dd bs=1 count=2 2>/dev/null | od -An -tx1"
+          ),
+          columns = 80,
+          rows = 4,
+        )
+        terminal = newKosmoTerminalView(session, frame = rect(0, 0, 800, 160))
+        frontend = newKosmoApplication(
+          newApplication("Terminal Search Input"), monitorsGitStatus = false
+        )
+        window = frontend.window
+      defer:
+        frontend.close()
+        terminal.close()
+        session.waitForCommands()
+        window.close()
+      window.setContentView(frontend.contentView)
+      frontend.contentView.frame = rect(0, 0, 1000, 700)
+      frontend.contentView.layoutSubtreeIfNeeded()
+      require terminal.waitForTerminalText("SEARCH_READY")
+      require frontend.openDocument(
+        newKosmoPaneDocument("search-input-terminal", "Terminal", terminal)
+      )
+      require window.makeFirstResponder(terminal)
+      require window.dispatchKeyDown(
+        KeyEvent(key: keyF, keyCode: keyF.ord, modifiers: terminalShortcutModifiers())
+      )
+      require window.fieldEditorClient() == terminal.searchField()
+      require window.dispatchTextInput("alpha")
+      let backspace = KeyEvent(key: keyBackspace, keyCode: keyBackspace.ord)
+      require window.dispatchKeyDown(backspace)
+      check terminal.searchField().text() == "alph"
+      require window.dispatchKeyDown(
+        KeyEvent(key: keyArrowLeft, keyCode: keyArrowLeft.ord)
+      )
+      require window.dispatchKeyDown(backspace)
+      check terminal.searchField().text() == "alh"
+      terminal.searchField().selectedRange = initTextRange(0, 3)
+      require window.dispatchKeyDown(backspace)
+      check terminal.searchField().text() == ""
+      require window.dispatchKeyDown(backspace)
+      check terminal.searchField().text() == ""
+      check window.fieldEditorClient() == terminal.searchField()
+
+      require window.dispatchKeyDown(KeyEvent(key: keyEscape, keyCode: keyEscape.ord))
+      require window.firstResponder() == Responder(terminal)
+      require window.dispatchTextInput("x")
+      require window.dispatchKeyDown(backspace)
+      # Only input sent after dismissing search may reach the PTY.
+      require terminal.waitForTerminalText("78 7f")
+
     test "modifier-click opens a terminal source location in Kosmo":
       for extension in ["nim", "md"]:
         let

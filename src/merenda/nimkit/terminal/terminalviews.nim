@@ -1076,6 +1076,12 @@ proc handleTerminalKeyDown(view: TerminalView, event: KeyEvent): bool =
 
 proc performTerminalKeyEquivalent*(view: TerminalView, event: KeyEvent): bool =
   ## Handle a terminal-local shortcut or translate the key into terminal input.
+  ## Leave keys offered through a focused child control to that control.
+  let owner = view.window()
+  if owner of Window:
+    let target = Window(owner).firstResponder()
+    if not target.isNil and target != Responder(view):
+      return
   view.handleTerminalKeyDown(event)
 
 proc handleTerminalRawEvent(view: TerminalView, event: MonoTextRawEvent): bool =
