@@ -499,6 +499,11 @@ Show Git Diff keeps a separate viewer for each repository. Detach their tabs to
 compare projects in separate windows; invoking the shortcut again returns to that
 project's viewer.
 
+In the GitHub view, expand a pull request and choose **Open diff in Kosmo** to
+compare its base branch with its head. Kosmo fetches dedicated PR refs in the
+background, including for fork PRs, and leaves your working branch and files intact.
+Fetch failures appear in the diff viewer; Refresh retries the comparison.
+
 ### Install and open a project
 
 You don't need Nim to use a prebuilt Kosmo release. Run the installer from a

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Pin FigDraw to release 0.46.2 and build bundled HarfBuzz/FriBidi libraries
+  with Zig for static Linux musl releases.
+- Open a pull request's base-to-head comparison in Kosmo from its GitHub view.
+  Fetch PR refs in the background, including fork PRs, without changing the working branch.
+
+## 0.29.2
+
+- Fix terminal underline artifacts and cursor jumps in Claude Code by updating
+  Terminex's handling of private keyboard control sequences.
+- Keep Backspace and cursor movement in the focused terminal search field instead
+  of forwarding those keys to the running terminal process.
+- Handle large numeric terminal parameters, colon colors, ignored escape strings,
+  and saved cursor state safely through the updated Terminex parser.
+
 ## 0.29.1
 
 - Publish Linux, FreeBSD, and macOS release assets without waiting for Windows,

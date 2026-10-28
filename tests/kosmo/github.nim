@@ -24,6 +24,37 @@ proc headingStartingWith(panel: KosmoGitHubPanel, prefix: string): View =
       return child
 
 suite "Kosmo GitHub Markdown viewer":
+  test "PR diff links dispatch snapshot metadata separately from browser links":
+    let panel = newKosmoGitHubPanel(sampleSnapshot())
+    defer:
+      panel.close()
+    require panel.waitForGitHub()
+    panel.markdownView.expandMarkdownHeadings()
+    require panel.waitForGitHub()
+    var openedRoot: string
+    var openedItem: GitHubItem
+    var browserCalls: int
+    panel.diffHandler = proc(rootPath: string, item: GitHubItem): bool =
+      openedRoot = rootPath
+      openedItem = item
+      true
+    panel.linkHandler = proc(link: string): bool =
+      inc browserCalls
+      true
+    let rendered = panel.markdownView.textStorage().stringValue()
+    let offset = rendered.find("Open diff in Kosmo")
+    require offset >= 0
+    require panel.markdownView.textView().openLinkAtIndex(
+      rendered[0 ..< offset].runeLen
+    )
+    check openedRoot == "/projects/project"
+    check openedItem.number == 8
+    check openedItem.baseBranch == "main"
+    check openedItem.headBranch == "feature/viewer"
+    check openedItem.pullRequestRepository() == "https://github.com/owner/project.git"
+    check browserCalls == 0
+    check sampleSnapshot().items[0].pullRequestRepository() == ""
+
   test "refresh uses the Git diff icon at the toolbar's right edge across themes":
     let
       panel = newKosmoGitHubPanel(sampleSnapshot())

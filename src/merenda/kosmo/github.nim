@@ -5,6 +5,8 @@ import ../nimkit/foundation/backgroundprocesses
 
 const GitHubDefaultItemLimit* = 100
 
+const GitHubDiffLinkPrefix* = "kosmo-pr-diff:"
+
 type
   GitHubItemKind* = enum
     ghikIssue
@@ -58,6 +60,20 @@ func title*(kind: GitHubItemKind): string =
   case kind
   of ghikIssue: "Issues"
   of ghikPullRequest: "Pull Requests"
+
+proc pullRequestRepository*(item: GitHubItem): string =
+  ## Repository URL hosting the PR, including fork PR refs exposed by GitHub.
+  if item.kind != ghikPullRequest or item.number <= 0:
+    return
+  let url = parseUri(item.url)
+  let suffix = "/pull/" & $item.number
+  if url.scheme in ["http", "https"] and url.hostname.len > 0 and
+      url.path.endsWith(suffix):
+    var repository = url
+    repository.path = url.path[0 ..< url.path.len - suffix.len] & ".git"
+    repository.query = ""
+    repository.anchor = ""
+    result = $repository
 
 func title*(state: GitHubJobState): string =
   case state
@@ -369,6 +385,10 @@ proc gitHubMarkdown*(snapshot: GitHubSnapshot): string =
         if item.headBranch.len > 0:
           result.add item.headBranch.markdownText() & " → " &
             item.baseBranch.markdownText() & "\n\n"
+        if item.kind == ghikPullRequest and item.number > 0 and item.baseBranch.len > 0 and
+            item.headBranch.len > 0:
+          result.add "[Open diff in Kosmo](" & GitHubDiffLinkPrefix & $item.number &
+            ")\n\n"
         if item.reviewDecision.len > 0:
           result.add "Review: " & item.reviewDecision.markdownText() & "\n\n"
         if item.kind == ghikPullRequest:

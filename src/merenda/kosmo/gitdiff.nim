@@ -75,6 +75,10 @@ type
     fromRevision*: string ## Left revision for gdckRevisionRange.
     toRevision*: string ## Right revision for gdckRevisionRange.
     toWorkingTree*: bool ## Compare fromRevision with the working tree.
+    pullRequestRepository*: string ## Fetch PR refs from this repository when set.
+    pullRequestBaseBranch*: string
+    pullRequestHeadBranch*: string
+    pullRequestNumber*: int
 
   GitDiffRevisionChoice* = object
     title*: string ## Human-readable branch or revision expression.
@@ -538,6 +542,26 @@ proc readGitDiff(
         "This folder is not a Git working tree.\n" & repository.output.strip()
       return
     result.rootPath = normalizedPath(repository.output.strip())
+    if comparison.pullRequestRepository.len > 0:
+      let fetched = runGit(
+        result.rootPath,
+        [
+          "fetch",
+          "--no-tags",
+          "--no-write-fetch-head",
+          "--no-recurse-submodules",
+          "--",
+          comparison.pullRequestRepository,
+          "+refs/heads/" & comparison.pullRequestBaseBranch & ":" &
+            comparison.fromRevision,
+          "+refs/pull/" & $comparison.pullRequestNumber & "/head:" &
+            comparison.toRevision,
+        ],
+      )
+      if fetched.code != 0:
+        result.errorMessage =
+          "Could not fetch pull request diff.\n" & fetched.output.strip()
+        return
     if dirExists(result.rootPath):
       try:
         result.rootPath = normalizedPath(expandFilename(result.rootPath))
@@ -1399,6 +1423,11 @@ proc syncHistoryControl(
     button.toolTip = "Select how many commits back along first-parent history"
 
 proc revisionTitle(panel: KosmoGitDiffPanel, revision: string): string =
+  if panel.comparison.pullRequestRepository.len > 0:
+    if revision == panel.comparison.fromRevision:
+      return panel.comparison.pullRequestBaseBranch
+    if revision == panel.comparison.toRevision:
+      return panel.comparison.pullRequestHeadBranch
   for choice in panel.snapshot.revisions:
     if choice.revision == revision:
       return choice.title

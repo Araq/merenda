@@ -75,6 +75,69 @@ proc visibleLoadedDiffTextViewCount(panel: KosmoGitDiffPanel): int =
       inc result
 
 suite "Kosmo Git diff":
+  test "PR comparisons fetch base and PR head without changing the working branch":
+    let root = createTempDir("kosmo-pr-diff-", "")
+    defer:
+      removeDir(root)
+    initRepository(root)
+    writeFile(root / "sample.txt", "base\n")
+    git(root, "add", "sample.txt")
+    git(root, "commit", "-qm", "Base")
+    git(root, "branch", "-M", "main")
+    git(root, "checkout", "-qb", "feature")
+    writeFile(root / "sample.txt", "PR head\n")
+    git(root, "commit", "-qam", "PR change")
+    git(root, "update-ref", "refs/pull/8/head", "HEAD")
+    git(root, "checkout", "-q", "main")
+    writeFile(root / "dirty.txt", "keep my work\n")
+    let comparison = GitDiffComparison(
+      kind: gdckRevisionRange,
+      fromRevision: "refs/kosmo/pull/8/base",
+      toRevision: "refs/kosmo/pull/8/head",
+      pullRequestRepository: root,
+      pullRequestBaseBranch: "main",
+      pullRequestHeadBranch: "feature",
+      pullRequestNumber: 8,
+    )
+    let snapshot = readGitDiff(root, comparison = comparison)
+    check snapshot.errorMessage == ""
+    check snapshot.branch == "main"
+    require snapshot.files.len == 1
+    check snapshot.files[0].path == "sample.txt"
+    check readFile(root / "sample.txt") == "base\n"
+    check readFile(root / "dirty.txt") == "keep my work\n"
+    git(
+      root,
+      "config",
+      "url." & root & ".insteadOf",
+      "https://github.com/owner/project.git",
+    )
+    let frontend =
+      newKosmoApplication(newApplication("PR diff link"), monitorsGitStatus = false)
+    defer:
+      frontend.close()
+    require frontend.showPullRequestDiff(
+      root,
+      GitHubItem(
+        kind: ghikPullRequest,
+        number: 8,
+        url: "https://github.com/owner/project/pull/8",
+        baseBranch: "main",
+        headBranch: "feature",
+      ),
+    )
+    require frontend.gitDiffPanel.waitForDiff(timeoutMilliseconds = 60_000)
+    check frontend.gitDiffPanel.snapshot.errorMessage == ""
+    check frontend.gitDiffPanel.snapshot.comparison.fromRevision ==
+      comparison.fromRevision
+    check frontend.gitDiffPanel.snapshot.comparison.toRevision == comparison.toRevision
+    check frontend.gitDiffPanel.fromRevisionButton.title == "main"
+    check frontend.gitDiffPanel.toRevisionButton.title == "feature"
+    git(root, "update-ref", "-d", "refs/pull/8/head")
+    let missing = readGitDiff(root, comparison = comparison)
+    check "Could not fetch pull request diff" in missing.errorMessage
+    check missing.files.len == 0
+
   test "Punch toolbar actions render their symbols in compact button frames":
     let panel = newKosmoGitDiffPanel(parseGitDiff(""))
     defer:
