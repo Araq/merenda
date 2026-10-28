@@ -269,7 +269,7 @@ jobs:
             file \
             pkg-config \
             cmake \
-            meson \
+            python3-venv \
             ninja-build \
             libegl1-mesa-dev \
             libgl1-mesa-dev \
@@ -283,6 +283,12 @@ jobs:
             libxcursor-dev \
             libxkbcommon-dev \
             libxrender-dev
+
+      - name: Install Meson with Zig linker support
+        run: |
+          python3 -m venv "$RUNNER_TEMP/meson-venv"
+          "$RUNNER_TEMP/meson-venv/bin/pip" install meson==1.10.1
+          echo "$RUNNER_TEMP/meson-venv/bin" >> "$GITHUB_PATH"
 
       - name: Cache packages
         uses: actions/cache@v4
