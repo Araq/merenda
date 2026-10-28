@@ -1,6 +1,6 @@
 ## A read-only, searchable GitHub document backed by a cancellable gh worker.
 
-import std/[atomics, monotimes, options, os, times]
+import std/[atomics, monotimes, options, os, strutils, times]
 import sigils/[core, threadProxies, threads]
 import threading/smartptrs
 import ../nimkit as nimkit
@@ -26,6 +26,8 @@ type
     panel: WeakRef[KosmoGitHubPanel]
 
   GitHubLinkHandler* = proc(link: string): bool {.closure.}
+
+  GitHubDiffHandler* = proc(rootPath: string, item: GitHubItem): bool {.closure.}
 
   GitHubKeyEquivalentHandler* = proc(event: nimkit.KeyEvent): bool {.closure.}
 
@@ -54,6 +56,7 @@ type
     refreshInterval: Duration
     keyEquivalentHandler: GitHubKeyEquivalentHandler
     linkHandler: GitHubLinkHandler
+    diffHandler: GitHubDiffHandler
     pendingSearchRange: Option[nimkit.TextRange]
 
 proc refresh*(panel: KosmoGitHubPanel)
@@ -255,6 +258,10 @@ proc `linkHandler=`*(panel: KosmoGitHubPanel, handler: GitHubLinkHandler) =
   ## Handle external HTTP links using the host application's workspace service.
   panel.linkHandler = handler
 
+proc `diffHandler=`*(panel: KosmoGitHubPanel, handler: GitHubDiffHandler) =
+  ## Open a PR comparison in the host application's Git diff viewer.
+  panel.diffHandler = handler
+
 protocol GitHubLinks of nimkit.TextViewDelegateProtocol:
   method tvClickedLink(
       delegate: GitHubLinkDelegate,
@@ -264,6 +271,13 @@ protocol GitHubLinks of nimkit.TextViewDelegateProtocol:
   ): bool =
     if not delegate.panel.isNil:
       let panel = delegate.panel[]
+      if not panel.closed and link.startsWith(GitHubDiffLinkPrefix):
+        for item in panel.snapshot.items:
+          if item.kind == ghikPullRequest and item.number > 0 and
+              link == GitHubDiffLinkPrefix & $item.number and item.baseBranch.len > 0 and
+              item.headBranch.len > 0 and not panel.diffHandler.isNil:
+            return panel.diffHandler(panel.snapshot.rootPath, item)
+        return false
       if not panel.closed and nimkit.initUrl(link).isHttpUrl() and
           not panel.linkHandler.isNil:
         return panel.linkHandler(link)

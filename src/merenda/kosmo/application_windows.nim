@@ -537,6 +537,33 @@ proc editorGitDirectory(frontend: KosmoApplication): string =
     if tab.id == id and tab.filePath.isSome:
       return nearestGitDirectory(absolutePath(tab.filePath.get).parentDir())
 
+proc showPullRequestDiff*(
+    frontend: KosmoApplication, rootPath: string, item: GitHubItem
+): bool {.discardable.} =
+  ## Fetch and open the PR's base-to-head comparison without checking out a branch.
+  let repository = item.pullRequestRepository()
+  if frontend.isNil or repository.len == 0 or item.baseBranch.len == 0 or
+      item.headBranch.len == 0:
+    return
+  if not frontend.showGitDiffSnapshot(
+    GitDiffSnapshot(source: gdsRepository, rootPath: rootPath),
+    refreshesRepository = true,
+  ):
+    return
+  let prefix = "refs/kosmo/pull/" & $item.number
+  frontend.gitDiffPanel.selectComparison(
+    GitDiffComparison(
+      kind: gdckRevisionRange,
+      fromRevision: prefix & "/base",
+      toRevision: prefix & "/head",
+      pullRequestRepository: repository,
+      pullRequestNumber: item.number,
+      pullRequestBaseBranch: item.baseBranch,
+      pullRequestHeadBranch: item.headBranch,
+    )
+  )
+  true
+
 proc showGitHub*(frontend: KosmoApplication, path = ""): bool {.discardable.} =
   ## Show GitHub issues and PRs for an explicit project or the active repository.
   if frontend.isNil or frontend.dockController.isNil:
@@ -612,6 +639,9 @@ proc showGitHub*(frontend: KosmoApplication, path = ""): bool {.discardable.} =
   panel.linkHandler = proc(link: string): bool =
     if not weakFrontend.isNil:
       return weakFrontend[].application.workspace().openUrl(link).succeeded
+  panel.diffHandler = proc(rootPath: string, item: GitHubItem): bool =
+    if not weakFrontend.isNil:
+      return weakFrontend[].showPullRequestDiff(rootPath, item)
   frontend.gitHubPanel = panel
   if controller.openPaneDocument(group, document):
     return true

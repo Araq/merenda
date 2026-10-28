@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Open a pull request's base-to-head comparison in Kosmo from its GitHub view.
+  Fetch PR refs in the background, including fork PRs, without changing the working branch.
+
 ## 0.29.2
 
 - Fix terminal underline artifacts and cursor jumps in Claude Code by updating
