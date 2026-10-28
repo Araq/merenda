@@ -480,11 +480,15 @@ suite "nimkit terminal screen and parser":
     screen.feed(parser, "\x1b[" & repeat('1', MaxTerminalCsiBytes + 2) & "Z")
     check parser.state == tpsGround
     screen.feed(parser, "ok")
-    check screen.plainText().endsWith("ok")
+    check screen.plainText() == "ok"
 
     parser.reset()
     screen.feed(parser, "\x1b]2;" & repeat('x', MaxTerminalStringBytes + 2))
+    check parser.state == tpsOsc
+    screen.feed(parser, "LEAK\x1b\\safe")
     check parser.state == tpsGround
+    check screen.title == ""
+    check screen.plainText() == "oksafe"
 
   test "ignored DCS payload cannot leak printable bytes into the screen":
     var

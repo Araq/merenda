@@ -8,6 +8,8 @@
   Terminex's handling of private keyboard control sequences.
 - Keep Backspace and cursor movement in the focused terminal search field instead
   of forwarding those keys to the running terminal process.
+- Handle large numeric terminal parameters, colon colors, ignored escape strings,
+  and saved cursor state safely through the updated Terminex parser.
 
 ## 0.29.1
 

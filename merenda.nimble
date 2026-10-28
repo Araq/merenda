@@ -22,8 +22,8 @@ requires "unicodedb >= 0.14.0"
 requires "faststreams >= 0.5.1"
 requires "gh:elcritch/nim-markdown#fix/arc-emphasis-ownership [regex]"
 requires "gh:elcritch/matter >= 0.6.1"
-# Terminex 0.4.1 fixes private keyboard controls and unsupported CSI variants.
-requires "gh:elcritch/terminex#2007acad9a82a9e915e892139f678c461ced03e1 [sigils]"
+# Terminex 0.4.1 fixes terminal control parsing, numeric bounds, and cursor state.
+requires "gh:elcritch/terminex#47d413e918eca9935739de659532d70d3d5371f0 [sigils]"
 requires "gh:Araq/iconbundler"
 requires "libbacktrace"
 requires "zippy >= 0.10.20"
