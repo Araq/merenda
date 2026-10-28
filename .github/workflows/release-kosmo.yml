@@ -268,6 +268,9 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             file \
             pkg-config \
+            cmake \
+            meson \
+            ninja-build \
             libegl1-mesa-dev \
             libgl1-mesa-dev \
             libgles2-mesa-dev \
@@ -318,8 +321,15 @@ jobs:
             "exec \"$zigDirectory/zig\" cc -target x86_64-linux-musl \"\$@\" -lunwind" \
             > "$zigCompiler"
           chmod +x "$zigCompiler"
+          zigCxxCompiler="$RUNNER_TEMP/zigcxx"
+          printf '%s\n' \
+            '#!/usr/bin/env bash' \
+            "exec \"$zigDirectory/zig\" c++ -target x86_64-linux-musl \"\$@\"" \
+            > "$zigCxxCompiler"
+          chmod +x "$zigCxxCompiler"
           echo "MUSL_CC=$zigCompiler" \
             >> "$GITHUB_ENV"
+          echo "MUSL_CXX=$zigCxxCompiler" >> "$GITHUB_ENV"
           "$zigDirectory/zig" version
 
       - name: Install latest Atlas
@@ -345,8 +355,7 @@ jobs:
           # pkg-config inject their shared-only -l flags into this static link.
           staticPkgConfigDir="$RUNNER_TEMP/kosmo-empty-pkgconfig"
           mkdir -p "$staticPkgConfigDir"
-          # Keep text shaping headers available after hiding graphics .pc files.
-          echo "HARFBUZZ_CFLAGS=$(pkg-config --cflags harfbuzz)" >> "$GITHUB_ENV"
+          # HarfBuzzy builds its own static text libraries with the musl toolchain.
           echo "PKG_CONFIG_LIBDIR=$staticPkgConfigDir" >> "$GITHUB_ENV"
 
       - name: Build Kosmo
@@ -358,8 +367,9 @@ jobs:
             --cc:gcc \
             --gcc.exe:"$MUSL_CC" \
             --gcc.linkerexe:"$MUSL_CC" \
-            --passC:"$HARFBUZZ_CFLAGS" \
-            --passL:-static \
+            --passL:"-static -lc++" \
+            -d:harfbuzzyStatic \
+            -d:harfbuzzyStaticCmakeArgs="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_C_COMPILER=$MUSL_CC -DCMAKE_CXX_COMPILER=$MUSL_CXX" \
             --opt:size \
             --debugger:native \
             --lineTrace:off \

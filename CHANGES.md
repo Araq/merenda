@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pin FigDraw to release 0.46.2 and build bundled HarfBuzz/FriBidi libraries
+  with Zig for static Linux musl releases.
 - Open a pull request's base-to-head comparison in Kosmo from its GitHub view.
   Fetch PR refs in the background, including fork PRs, without changing the working branch.
 
