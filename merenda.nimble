@@ -22,8 +22,8 @@ requires "unicodedb >= 0.14.0"
 requires "faststreams >= 0.5.1"
 requires "gh:elcritch/nim-markdown#fix/arc-emphasis-ownership [regex]"
 requires "gh:elcritch/matter >= 0.6.1"
-# Terminex 0.4.1 fixes terminal control parsing, numeric bounds, and cursor state.
-requires "gh:elcritch/terminex#47d413e918eca9935739de659532d70d3d5371f0 [sigils]"
+# Terminex 0.4.1 with all fixes merged in PR #7.
+requires "gh:elcritch/terminex#d04b70ae19a98c4a898154ef44e46524ddef2842 [sigils]"
 requires "gh:Araq/iconbundler"
 requires "libbacktrace"
 requires "zippy >= 0.10.20"
